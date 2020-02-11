@@ -29,6 +29,7 @@ extern unsigned char msx[];
 #include "ff.h"
 #include "fflib.h"
 #include "fm.h"
+#include "util.h"
 
 #define SDTEST
 #ifdef SDTEST
@@ -257,7 +258,7 @@ int sdopen (int i)
         return ret;
     if (ffd == -1)
         ffd = i;
-    lp.cpath = strdup (lbuf);
+    lp.path = strdup (lbuf);
     ret = scan_files(lbuf); //f_opendir (&fdir, lbuf);
     //
     f_mount(NULL, lbuf, 0);                    /* UnMount the default drive */
@@ -265,7 +266,7 @@ int sdopen (int i)
     if (ret == FR_OK)
     {
         struct fm_file *ptr = lp.entries;
-        DPrintf("Listing path contents for '%s'\n", lp.cpath);
+        DPrintf("Listing path contents for '%s'\n", lp.path);
         while (ptr != NULL)
         {
             DPrintf("%s%c\n", ptr->name, ptr->dir?'/':' ');
@@ -648,9 +649,31 @@ int file_run(char *fname)
     return 0;
 }
 //app
-//1st
+//restore app state after other module was executed
+int _app_restore (char init)
+{
+    if (init)
+        initConsole ();
+    DbgHeader("FATFS EXFAT Example");
+    DbgMess("Press o/circle to exit");
+    DPrintf("\n");
+    if (*fn)
+        DPrintf("press triangle to list contents of file '%s'\n", fn);
+    if (*wn)
+        DPrintf("press cross to create a test file '%s'\n", wn);
+    if (*dn)
+        DPrintf("press rectangle to list contents of dir '%s'\n", dn);
+    if (ffd != -1)
+        DPrintf("press start for write/read test on drive '%d:/'\n", ffd);
+    return 0;
+}//1st
 int app_init (int dt)
 {
+    // change to 2D context ( virtual size of the screen is 848.0 x 512.0)
+    //for 8x8 font, we can split the screen into 106x64 chars - 2 panes w53chars
+    //we leave 8 lines for progress/status/info below the panes
+    fm_panel_init (&lp, 0, 0, 53*8, 56*8, 1);
+    fm_panel_init (&rp, 53*8, 0, 53*8, 56*8, 0);
     //debug console
     initConsole ();
     //fatfs test
@@ -747,15 +770,78 @@ int app_input(int dat)
 //3rd
 int app_update(int dat)
 {
-    return 1;
+    //2 input
+    int btn = app_input (0);
+    //quit?
+    if (btn & PAD_CI_MASK)
+        return -1;
+    //scroll panel up
+    else if(btn & PAD_UP_MASK)
+    {
+        if (lp.active)
+            fm_panel_scroll (&lp, 0);
+        else
+            fm_panel_scroll (&rp, 0);
+    }
+    //scroll panel dn
+    else if(btn & PAD_DN_MASK)
+    {
+        if (lp.active)
+            fm_panel_scroll (&lp, 1);
+        else
+            fm_panel_scroll (&rp, 1);
+    }
+    //file create
+    else if(btn & PAD_CR_MASK)
+    {
+        file_new (wn);
+        //
+        _app_restore (1);
+    }
+    //file contents
+    else if(btn & PAD_TR_MASK)
+    {
+        file_run (fn);
+        //
+        _app_restore (1);
+    }
+    //dir listing
+    else if(btn & PAD_SQ_MASK)
+    {
+        dir_run (dn);
+        //
+        _app_restore (1);
+    }
+    //file write
+    else if(btn & PAD_ST_MASK)
+    {
+        if (ffd != -1)
+            file_write_perf (ffd);
+        _app_restore (0);
+    }
+    //
+    return 0;
 }
 //4th
 int app_render(int dat)
 {
     /* DRAWING STARTS HERE */
-    DbgDraw();
+    tiny3d_Clear(0xff000000, TINY3D_CLEAR_ALL);
+        
+    // Enable alpha Test
+    tiny3d_AlphaTest(1, 0x10, TINY3D_ALPHA_FUNC_GEQUAL);
+
+   // Enable alpha blending.
+            tiny3d_BlendFunc(1, TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA | TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA,
+                TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA | TINY3D_BLEND_FUNC_DST_ALPHA_ZERO,
+                TINY3D_BLEND_RGB_FUNC_ADD | TINY3D_BLEND_ALPHA_FUNC_ADD);
     //
-    tiny3d_Flip();
+    //DbgDraw ();
+    // change to 2D context ( virtual size of the screen is 848.0 x 512.0)
+    fm_panel_draw (&lp);
+    fm_panel_draw (&rp);
+    //
+    tiny3d_Flip ();
 
     return 1;
 }
@@ -766,73 +852,25 @@ int app_cleanup(int dat)
 
     return 1;
 }
-//restore app state after other module was executed
-int _app_restore (char init)
-{
-    if (init)
-        initConsole ();
-    DbgHeader("FATFS EXFAT Example");
-    DbgMess("Press o/circle to exit");
-    DPrintf("\n");
-    if (*fn)
-        DPrintf("press triangle to list contents of file '%s'\n", fn);
-    if (*wn)
-        DPrintf("press cross to create a test file '%s'\n", wn);
-    if (*dn)
-        DPrintf("press rectangle to list contents of dir '%s'\n", dn);
-    if (ffd != -1)
-        DPrintf("press start for write/read test on drive '%d:/'\n", ffd);
-    return 0;
-}
+
 //
 s32 main(s32 argc, const char* argv[])
 {
     //1 init
 	app_init (0);
     _app_restore (0);
-    int btn = app_input (0);
+    app_input (0);
 	// Ok, everything is setup. Now for the main loop.
 	while(1) 
     {
-        //2 input
-        btn = app_input (0);
-        if (btn & PAD_CI_MASK)
-            break;
-        //file create
-        else if(btn & PAD_CR_MASK)
-        {
-            file_new (wn);
-            //
-            _app_restore (1);
-        }
-        //file contents
-        else if(btn & PAD_TR_MASK)
-        {
-            file_run (fn);
-            //
-            _app_restore (1);
-        }
-        //dir listing
-        else if(btn & PAD_SQ_MASK)
-        {
-            dir_run (dn);
-            //
-            _app_restore (1);
-        }
-        //file write
-        else if(btn & PAD_ST_MASK)
-        {
-            if (ffd != -1)
-                file_write_perf (ffd);
-            _app_restore (0);
-        }
         //3
-        app_update(0);
+        if (app_update (0) == -1)
+            break;
 		//4
-        app_render(0);
+        app_render (0);
 	}
     //5
-    app_cleanup(0);
+    app_cleanup (0);
     //
 	return 0;
 }
