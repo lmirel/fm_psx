@@ -252,14 +252,14 @@ int sdopen (int i)
     //FDIR fdir;
     char lbuf[10];
     FATFS fs;     /* Ponter to the filesystem object */
-    snprintf(lbuf, 10, "%d:/", i);
-    int ret = f_mount(&fs, lbuf, 0);                    /* Mount the default drive */
+    snprintf (lbuf, 10, "%d:/", i);
+    int ret = f_mount (&fs, lbuf, 0);                    /* Mount the default drive */
     if (ret != FR_OK)
         return ret;
     if (ffd == -1)
         ffd = i;
     lp.path = strdup (lbuf);
-    ret = scan_files(lbuf); //f_opendir (&fdir, lbuf);
+    //ret = scan_files(lbuf); //f_opendir (&fdir, lbuf);
     //
     f_mount(NULL, lbuf, 0);                    /* UnMount the default drive */
 
@@ -272,7 +272,7 @@ int sdopen (int i)
             DPrintf("%s%c\n", ptr->name, ptr->dir?'/':' ');
             ptr = ptr->next;
         }
-        fs_info(i);
+        fs_info (i);
     }
     //
     return ret;
@@ -649,6 +649,12 @@ int file_run(char *fname)
     return 0;
 }
 //app
+struct fm_panel *app_active_panel()
+{
+    if (lp.active)
+        return &lp;
+    return &rp;
+}
 //restore app state after other module was executed
 int _app_restore (char init)
 {
@@ -667,6 +673,9 @@ int _app_restore (char init)
         DPrintf("press start for write/read test on drive '%d:/'\n", ffd);
     return 0;
 }//1st
+
+char sp[] = "fat1:/";
+char sp2[] = "sys:/";
 int app_init (int dt)
 {
     // change to 2D context ( virtual size of the screen is 848.0 x 512.0)
@@ -678,16 +687,19 @@ int app_init (int dt)
     initConsole ();
     //fatfs test
     fatfs_init ();
-
+    //
     tiny3d_Init (1024*1024);
-
+    //
 	ioPadInit (7);
-
+    //
 	// Load texture
     LoadTexture ();
     //
     DbgHeader("FATFS EXFAT Example");
     DbgMess("Press x/cross to exit");
+    //
+    fm_panel_scan (&lp, sp2);
+    fm_panel_scan (&rp, sp);
     //
     return 1;
 }
@@ -763,6 +775,14 @@ int app_input(int dat)
                 ret |= PAD_ST_MASK;
             if(paddata.BTN_SELECT)
                 ret |= PAD_SE_MASK;
+            if(paddata.BTN_R1)
+                ret |= PAD_R1_MASK;
+            if(paddata.BTN_L1)
+                ret |= PAD_L1_MASK;
+            if(paddata.BTN_R2)
+                ret |= PAD_R2_MASK;
+            if(paddata.BTN_L2)
+                ret |= PAD_L2_MASK;
         }
     }
     return ret;
@@ -774,50 +794,57 @@ int app_update(int dat)
     int btn = app_input (0);
     //quit?
     if (btn & PAD_CI_MASK)
-        return -1;
+    {
+        if (fm_panel_exit (app_active_panel ()))
+            return -1;
+    }
+    //activate left panel
+    else if(btn & PAD_L1_MASK)
+    {
+        lp.active = 1;
+        rp.active = 0;
+    }
+    //activate right panel
+    else if(btn & PAD_R1_MASK)
+    {
+        lp.active = 0;
+        rp.active = 1;
+    }
     //scroll panel up
     else if(btn & PAD_UP_MASK)
     {
-        if (lp.active)
-            fm_panel_scroll (&lp, 0);
-        else
-            fm_panel_scroll (&rp, 0);
+        fm_panel_scroll (app_active_panel (), FALSE);
     }
     //scroll panel dn
     else if(btn & PAD_DN_MASK)
     {
-        if (lp.active)
-            fm_panel_scroll (&lp, 1);
-        else
-            fm_panel_scroll (&rp, 1);
+        fm_panel_scroll (app_active_panel (), TRUE);
+    }
+    //enter dir
+    else if(btn & PAD_RT_MASK)
+    {
+        fm_panel_enter (app_active_panel ());
+    }
+    //exit dir
+    else if(btn & PAD_LT_MASK)
+    {
+        fm_panel_exit (app_active_panel ());
     }
     //file create
     else if(btn & PAD_CR_MASK)
     {
-        file_new (wn);
-        //
-        _app_restore (1);
     }
     //file contents
     else if(btn & PAD_TR_MASK)
     {
-        file_run (fn);
-        //
-        _app_restore (1);
     }
     //dir listing
     else if(btn & PAD_SQ_MASK)
     {
-        dir_run (dn);
-        //
-        _app_restore (1);
     }
     //file write
     else if(btn & PAD_ST_MASK)
     {
-        if (ffd != -1)
-            file_write_perf (ffd);
-        _app_restore (0);
     }
     //
     return 0;

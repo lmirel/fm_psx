@@ -12,8 +12,77 @@
 
 #include "fm.h"
 #include "util.h"
+#include "fsutil.h"
+#include "console.h"
 
-void NPrintf(const char* fmt, ...);
+//enter current dir
+int fm_panel_enter (struct fm_panel *p)
+{
+    //can't enter file
+    if (!p->current->dir)
+        return -1;
+    //move deeper
+    char np[256];
+    if (p->path && *p->path)
+        snprintf (np, 255, "%s/%s", p->path, p->current->name);
+    else
+        snprintf (np, 255, "%s", p->current->name);
+    return fm_panel_scan (p, np);
+    //
+    return 0;
+}
+
+//exit current dir
+int fm_panel_exit (struct fm_panel *p)
+{
+    char np[256];
+    char *lp = strrchr (p->path, '/');
+    if (lp)
+    {
+        //is this already on root?
+        if (*(lp + 1) == '\0')
+            return -1;
+        *lp = 0;
+    }
+    else
+        return -1;
+    snprintf (np, 255, "%s", p->path);
+    return fm_panel_scan (p, np);
+}
+
+int fm_panel_clear (struct fm_panel *p)
+{
+    struct fm_file *ptr;
+    for (ptr = p->entries; ptr != NULL; ptr = p->entries)
+    {
+        p->entries = ptr->next;
+        if (ptr->name)
+            free (ptr->name);
+        free (ptr);
+    }
+    p->current = NULL;
+    p->current_idx = -1;
+    //
+    p->files = 0;
+    p->dirs = 0;
+    p->fsize = 0;
+    //
+    return 0;
+}
+
+int fm_panel_scan (struct fm_panel *p, char *path)
+{
+    if (p->path)
+        free (p->path);
+    p->path = strdup (path);
+    //cleanup
+    fm_panel_clear (p);
+    //
+    if (p->path)
+        fs_path_scan (p);
+    //
+    return 0;
+}
 
 int fm_panel_init (struct fm_panel *p, int x, int y, int w, int h, char act)
 {
@@ -21,10 +90,17 @@ int fm_panel_init (struct fm_panel *p, int x, int y, int w, int h, char act)
     p->y = y;
     p->w = w;
     p->h = h;
+    //
     p->active = act;
     p->entries = NULL;
     p->current = NULL;
+    p->current_idx = -1;
     p->path = NULL;
+    //
+    p->files = 0;
+    p->dirs = 0;
+    p->fsize = 0;
+    p->fs_type = FS_TNONE;
     //
     return 0;
 }
@@ -32,19 +108,34 @@ int fm_panel_init (struct fm_panel *p, int x, int y, int w, int h, char act)
 int fm_panel_draw (struct fm_panel *p)
 {
     static char fname[53];
+    int wh = p->h/8 - 2;    //scroll rows: panel height - 2 rows
+    int se = 0;             //skipped entries
     //
-    if (p->active)
+    if (p->active == TRUE)
         DrawRect2d (p->x, p->y, 0, p->w, p->h, 0xb4b4b4ff);
     else
         DrawRect2d (p->x, p->y, 0, p->w, p->h, 0x787878ff);
     //draw panel content: 56 lines - 1 for dir path, 1 for status - 54
     int k;
-    SetFontColor (0x000000ff, 0x00000000);
-    SetFontAutoCenter (0);
     SetCurrentFont (2);
     SetFontSize (8, 8);
+    //title - current path
+    SetFontColor (0x0000ffff, 0x00000000);
+    SetFontAutoCenter (0);
+    if (p->path)
+    {
+        snprintf (fname, 51, "%s", p->path);
+        DrawString (p->x, p->y, fname);
+    }
+    //
+    SetFontColor (0x000000ff, 0x00000000);
+    SetFontAutoCenter (0);
+    //
     struct fm_file *ptr = p->entries;
-    for (k = 0; k < 54 && ptr != NULL; k++, ptr = ptr->next)
+    //do we need to skip entries on listing?
+    for (se = p->current_idx - wh + 1; se > 0 && ptr != NULL; ptr = ptr->next, se--)
+        ;//skip some entries
+    for (k = 0; k < wh && ptr != NULL; k++, ptr = ptr->next)
     {
         //draw current item
         if (p->current == ptr)
@@ -57,10 +148,43 @@ int fm_panel_draw (struct fm_panel *p)
         }
         else
         {
-            //
-            fm_fname_get (ptr, 51, fname);
-            DrawString (p->x + 8, p->y + 8 + k * 8, fname);
+            if (ptr->selected)
+            {
+                fname[0] = '*';
+                fm_fname_get (ptr, 51, fname + 1);
+                DrawString (p->x, p->y + 8 + k * 8, fname);
+            }
+            else
+            {
+                fm_fname_get (ptr, 51, fname);
+                DrawString (p->x + 8, p->y + 8 + k * 8, fname);
+            }
         }
+        //file size - to the right side of the name
+        if (!ptr->dir)
+        {
+            if (ptr->size > GBSZ)
+                snprintf (fname, 7, "%4luGB", ptr->size / GBSZ);
+            else if (ptr->size > MBSZ)
+                snprintf (fname, 7, "%4luMB", ptr->size / MBSZ);
+            else
+                snprintf (fname, 7, "%4luKB", ptr->size / KBSZ);
+            DrawString (p->x + 8 + (46 * 8), p->y + 8 + k * 8, fname);
+        }
+    }
+    //status - size, files, dirs
+    SetFontColor (0x0000ffff, 0x00000000);
+    SetFontAutoCenter (0);
+    if (p->path)
+    {
+        int bw = snprintf (fname, 51, "%d dirs, %d files - ", p->dirs, p->files);
+        if (p->fsize > GBSZ)
+            snprintf (fname + bw, 51 - bw, "%llu GB", p->fsize / GBSZ);
+        else if (p->fsize > MBSZ)
+            snprintf (fname + bw, 51 - bw, "%llu MB", p->fsize / MBSZ);
+        else
+            snprintf (fname + bw, 51 - bw, "%llu KB", p->fsize / KBSZ);
+        DrawString (p->x, p->y + wh * 8 + 8, fname);
     }
     //
     return 0;
@@ -104,14 +228,20 @@ int fm_panel_scroll (struct fm_panel *p, int dn)
     if (dn)
     {
         if (p->current->next != NULL)
+        {
             p->current = p->current->next;
+            p->current_idx++;
+        }
         else
             return -1;
     }
     else
     {
         if (p->current->prev != NULL)
+        {
             p->current = p->current->prev;
+            p->current_idx--;
+        }
         else
             return -1;
     }
@@ -129,18 +259,22 @@ int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz)
     link->dir = dir;
     link->size = fsz;
     //
+    link->selected = FALSE;
+    //
     link->prev = NULL;
     link->next = NULL;
     NPrintf ("fm_panel_add %s dir %d\n", fn, dir);
-
+    //stats
+    if (fsz > 0)
+        p->fsize += fsz;
+    if (dir)
+        p->dirs++;
+    else
+        p->files++;
     // If head is empty, create new list
     if (p->entries == NULL)
     {
         p->entries = link;
-        //
-        if (p->current == NULL)
-            p->current = link;
-        return 0;
     }
     else
     {
@@ -165,7 +299,7 @@ int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz)
         else
         {
             //skip dirs
-            while (current->next != NULL && current->dir == 1)
+            while (current->next != NULL && current->dir == TRUE)
                 current = current->next;
             //compare only with files
             if (!current->dir && strcmp (current->name, fn) < 0)
@@ -194,8 +328,8 @@ int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz)
     #endif
     }
     //set current item
-    if (p->current == NULL)
-        p->current = link;
+    p->current = p->entries;
+    p->current_idx = 0;
     //
     return 0;
 }
