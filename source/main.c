@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <math.h>
 
+#define _FPS
+
 #include <io/pad.h>
 
 #include <tiny3d.h>
@@ -698,8 +700,8 @@ int app_init (int dt)
     DbgHeader("FATFS EXFAT Example");
     DbgMess("Press x/cross to exit");
     //
-    fm_panel_scan (&lp, sp2);
-    fm_panel_scan (&rp, sp);
+    fm_panel_scan (&lp, NULL);
+    fm_panel_scan (&rp, NULL);
     //
     return 1;
 }
@@ -867,6 +869,14 @@ int app_render(int dat)
     // change to 2D context ( virtual size of the screen is 848.0 x 512.0)
     fm_panel_draw (&lp);
     fm_panel_draw (&rp);
+    //
+#ifdef _FPS
+    char sfps[8];
+    snprintf (sfps, 7, "%dfps", fps_update ());
+    SetFontColor (0xff0000ff, 0x00000000);
+    SetFontAutoCenter (0);
+    DrawString (800, 0, sfps);
+#endif
     //
     tiny3d_Flip ();
 

@@ -16,6 +16,7 @@
 #include <lv2/sysfs.h>
 
 #include "ff.h"
+#include "fflib.h"
 #include "fm.h"
 #include "fsutil.h"
 #include "console.h"
@@ -24,6 +25,29 @@
 #define FS_S_IFMT 0170000
 #define FS_S_IFDIR 0040000
 #define DT_DIR 1
+
+struct fs_root {
+    u64 devid;
+    char *fs;
+    int fs_type;
+    int fs_idx;
+};
+
+struct fs_root rootfs[] = {
+    {0x0ULL,             "sys:/", FS_TSYS, 0},
+	{0x010300000000000AULL, NULL, FS_TNONE, -1},
+    {0x010300000000000BULL, NULL, FS_TNONE, -1},
+    {0x010300000000000CULL, NULL, FS_TNONE, -1},
+    {0x010300000000000DULL, NULL, FS_TNONE, -1},
+	{0x010300000000000EULL, NULL, FS_TNONE, -1},
+    {0x010300000000000FULL, NULL, FS_TNONE, -1},
+    {0x010300000000001FULL, NULL, FS_TNONE, -1},
+    {0x0103000000000020ULL, NULL, FS_TNONE, -1},
+};
+//fs type counters
+int fs_fat_k = 0;
+int fs_ext_k = 0;
+int fs_ntfs_k = 0;
 
 /*
 sysFsGetFreeSize("/dev_hdd0/", &blockSize, &freeSize);
@@ -58,10 +82,138 @@ if(find_device==11) sprintf(filename, "/dev_bdvd");
 
  */
 
+//probe for supported FSs on various devices
+int rootfs_probe ()
+{
+    char devfs[9];
+    char flag = 0;  //notify caller that there is a change
+    int k, res;
+    //check existing for unplug
+    for (k = 0; k < sizeof (rootfs) / sizeof (struct fs_root); k++)
+    {
+        if (rootfs[k].fs && rootfs[k].devid > 0)
+        {
+            //are these still plugged in?
+            NPrintf ("rootfs_probe probing detach on dev %d fs: \n", k, rootfs[k].fs);
+            //FAT
+            if (fs_fat_k && rootfs[k].fs_type == FS_TFAT /*&& !fflib_is_fatfs (rootfs[k].fs + 3)*/)
+            {
+                char *path = rootfs[k].fs + 3;
+                FDIR dir;
+                FATFS fs;       /* Work area (filesystem object) for logical drive */
+                if (f_mount (&fs, path, 0) == FR_OK)
+                {
+                    if (f_opendir (&dir, path) == FR_OK)
+                    {
+                        f_closedir (&dir);
+                        f_mount (0, path, 0);
+                        continue;
+                    }
+                    f_mount (0, path, 0);
+                }
+                NPrintf ("rootfs_probe detach fat%d: on dev %d fs: %s\n", rootfs[k].fs_idx, k, rootfs[k].fs);
+                //no longer valid - detach
+                fflib_detach (rootfs[k].fs_idx);
+                rootfs[k].fs_type = FS_TNONE;
+                rootfs[k].fs_idx = -1;
+                free (rootfs[k].fs);
+                rootfs[k].fs = NULL;
+                fs_fat_k--;
+                flag++;
+                //
+            }
+            //NTFS
+            if (fs_ntfs_k && rootfs[k].fs_type == FS_TNTFS)
+            {
+                if (0)
+                {
+                    //no longer valid - detach
+                    rootfs[k].fs_type = FS_TNONE;
+                    rootfs[k].fs_idx = -1;
+                    free (rootfs[k].fs);
+                    rootfs[k].fs = NULL;
+                    fs_ntfs_k--;
+                    flag++;
+                    //
+                    continue;
+                }
+            }
+            //EXT
+            if (fs_ext_k && rootfs[k].fs_type == FS_TEXT)
+            {
+                if (0)
+                {
+                    //no longer valid - detach
+                    rootfs[k].fs_type = FS_TNONE;
+                    rootfs[k].fs_idx = -1;
+                    free (rootfs[k].fs);
+                    rootfs[k].fs = NULL;
+                    fs_ext_k--;
+                    flag++;
+                    //
+                    continue;
+                }
+            }
+        }
+    }
+    //check new devices
+    for (k = 0; k < sizeof (rootfs) / sizeof (struct fs_root); k++)
+    {
+        if (rootfs[k].fs == NULL && rootfs[k].devid > 0)
+        {
+            //check for new devices connected
+            NPrintf ("rootfs_probe probing attach on %d\n", k);
+            //probe FAT
+            res = fflib_attach (fs_fat_k, rootfs[k].devid, 1);
+            if (0 == res)
+            {
+                snprintf (devfs, 8, "fat%d:/", fs_fat_k);
+                rootfs[k].fs = strdup (devfs);
+                rootfs[k].fs_type = FS_TFAT;
+                rootfs[k].fs_idx = fs_fat_k;
+                fs_fat_k++;
+                flag++;
+                NPrintf ("rootfs_probe attach fat%d: on dev %d\n", rootfs[k].fs_idx, k);
+                //move on, this is taken now
+                continue;
+            }
+            else
+            {
+                NPrintf ("!rootfs_probe attach fat%d: on dev %d, res %d\n", fs_fat_k, k, res);
+                fflib_detach (fs_fat_k);
+            }
+            //probe NTFS
+            //probe EXT
+        }
+    }
+    //
+    if (flag)
+        return 1;
+    //
+    return 0;
+}
+
+int root_scan_path (struct fm_panel *p)
+{
+    //probe rootfs devices
+    rootfs_probe ();
+    //
+    int k;
+    for (k = 0; k < sizeof (rootfs) / sizeof (struct fs_root); k++)
+    {
+        if (rootfs[k].fs)
+            fm_panel_add (p, rootfs[k].fs, 1, 0);
+    }
+    return 0;
+}
+
 int fs_path_scan (struct fm_panel *p)
 {
     if (!p->path)
-        return -1;
+    {
+        p->fs_type = FS_TNONE;
+        return root_scan_path (p);
+    }
     //scan FAT/ExFAT path
     if (strncmp (p->path, "fat", 3) == 0)
     {
@@ -120,7 +272,7 @@ int sys_scan_path (struct fm_panel *p)
             snprintf (lp, 255, "%s/%s", lpath, dir.d_name);
             sysFSStat stat;
             res = sysLv2FsStat (lp, &stat);
-            NPrintf ("sysLv2FsStat for '%s', res %d\n", lp, res);
+            //NPrintf ("sysLv2FsStat for '%s', res %d\n", lp, res);
             if (res >= 0)
                 fm_panel_add (p, dir.d_name, 0, stat.st_size);
             else
@@ -161,7 +313,7 @@ int fat_scan_path (struct fm_panel *p)
             else 
             {                                       /* It is a file. */
                 snprintf (lp, 255, "%s/%s", lpath, fno.fname);
-                NPrintf ("FAT f_stat for '%s', res %d\n", lp, res);
+                //NPrintf ("FAT f_stat for '%s', res %d\n", lp, res);
                 if (f_stat (lp, &fno) == FR_OK)
                     fm_panel_add (p, fno.fname, 0, fno.fsize);
                 else

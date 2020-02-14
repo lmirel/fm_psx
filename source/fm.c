@@ -35,17 +35,24 @@ int fm_panel_enter (struct fm_panel *p)
 //exit current dir
 int fm_panel_exit (struct fm_panel *p)
 {
+    //can't return from here on root with no FS
+    if (!p->path)
+        return -1;
+    //
     char np[256];
     char *lp = strrchr (p->path, '/');
     if (lp)
     {
         //is this already on root?
         if (*(lp + 1) == '\0')
-            return -1;
+            //exit to rootfs
+            return fm_panel_scan (p, NULL);
         *lp = 0;
     }
     else
-        return -1;
+        //exit to rootfs
+        return fm_panel_scan (p, NULL);
+    //
     snprintf (np, 255, "%s", p->path);
     return fm_panel_scan (p, np);
 }
@@ -74,14 +81,15 @@ int fm_panel_scan (struct fm_panel *p, char *path)
 {
     if (p->path)
         free (p->path);
-    p->path = strdup (path);
+    if (path)
+        p->path = strdup (path);
+    else
+        p->path = NULL;
     //cleanup
     fm_panel_clear (p);
+        
     //
-    if (p->path)
-        fs_path_scan (p);
-    //
-    return 0;
+    return fs_path_scan (p);
 }
 
 int fm_panel_init (struct fm_panel *p, int x, int y, int w, int h, char act)
@@ -123,10 +131,10 @@ int fm_panel_draw (struct fm_panel *p)
     SetFontColor (0x0000ffff, 0x00000000);
     SetFontAutoCenter (0);
     if (p->path)
-    {
         snprintf (fname, 51, "%s", p->path);
-        DrawString (p->x, p->y, fname);
-    }
+    else
+        snprintf (fname, 51, "%s", "[root]");
+    DrawString (p->x, p->y, fname);
     //
     SetFontColor (0x000000ff, 0x00000000);
     SetFontAutoCenter (0);
@@ -263,7 +271,7 @@ int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz)
     //
     link->prev = NULL;
     link->next = NULL;
-    NPrintf ("fm_panel_add %s dir %d\n", fn, dir);
+    //NPrintf ("fm_panel_add %s dir %d\n", fn, dir);
     //stats
     if (fsz > 0)
         p->fsize += fsz;
@@ -292,7 +300,7 @@ int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz)
             }
             else
             {
-                NPrintf ("fm_panel_add before %s\n", current->name);
+                //NPrintf ("fm_panel_add before %s\n", current->name);
                 add_before (p, link, current);
             }
         }
@@ -308,7 +316,7 @@ int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz)
             //
             if (strcmp (current->name, fn) > 0)
             {
-                NPrintf ("fm_panel_add before %s\n", current->name);
+                //NPrintf ("fm_panel_add before %s\n", current->name);
                 add_before (p, link, current);
             }
             else
