@@ -680,11 +680,8 @@ char sp[] = "fat1:/";
 char sp2[] = "sys:/";
 int app_init (int dt)
 {
-    // change to 2D context ( virtual size of the screen is 848.0 x 512.0)
-    //for 8x8 font, we can split the screen into 106x64 chars - 2 panes w53chars
-    //we leave 8 lines for progress/status/info below the panes
-    fm_panel_init (&lp, 0, 0, 53*8, 56*8, 1);
-    fm_panel_init (&rp, 53*8, 0, 53*8, 56*8, 0);
+    fm_panel_init (&lp, 0, 0, PANEL_W*8, PANEL_H*8, 1);
+    fm_panel_init (&rp, PANEL_W*8, 0, PANEL_W*8, PANEL_H*8, 0);
     //debug console
     initConsole ();
     //fatfs test
@@ -702,6 +699,11 @@ int app_init (int dt)
     //
     fm_panel_scan (&lp, NULL);
     fm_panel_scan (&rp, NULL);
+    //
+    fm_status_set ("use LEFT and RIGHT to navigate as well as CROSS and CIRCLE", 0, 0xeeeeeeFF);
+    fm_status_set ("use L1 and R1 to switch active tab", 1, 0x00ff00FF);
+    fm_status_set ("use RECTANGLE to copy content", 2, 0xffff00FF);
+    fm_status_set ("use TRIANGLE to erase content", 3, 0xff0000FF);
     //
     return 1;
 }
@@ -832,9 +834,16 @@ int app_update(int dat)
     {
         fm_panel_exit (app_active_panel ());
     }
-    //file create
+    //cross
     else if(btn & PAD_CR_MASK)
     {
+        char lp[CBSIZE];
+        struct fm_panel *p = app_active_panel ();
+        if (p->path)
+        {
+            snprintf (lp, CBSIZE, "%s/%s", p->path, p->current->name);
+            fm_job_list (lp);
+        }
     }
     //file contents
     else if(btn & PAD_TR_MASK)
@@ -869,6 +878,8 @@ int app_render(int dat)
     // change to 2D context ( virtual size of the screen is 848.0 x 512.0)
     fm_panel_draw (&lp);
     fm_panel_draw (&rp);
+    //
+    fm_status_draw (dat);
     //
 #ifdef _FPS
     char sfps[8];

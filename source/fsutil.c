@@ -49,6 +49,11 @@ int fs_fat_k = 0;
 int fs_ext_k = 0;
 int fs_ntfs_k = 0;
 
+int fat_scan_path (struct fm_panel *p);
+int sys_scan_path (struct fm_panel *p);
+
+int sys_job_scan (struct fm_job *p, char *path);
+int fat_job_scan (struct fm_job *p, char *path);
 /*
 sysFsGetFreeSize("/dev_hdd0/", &blockSize, &freeSize);
 sprintf(filename, "/dev_usb00%c/", 47+find_device);
@@ -81,6 +86,41 @@ if(find_device==11) sprintf(filename, "/dev_bdvd");
             if(flags & ASYNC_NTFS) ps3ntfs_close(v->fd); else sysLv2FsClose(v->fd);
 
  */
+int fs_job_scan (struct fm_job *job)
+{
+    if (!job->spath)
+    {
+        job->stype = FS_TNONE;
+        return -1;
+    }
+    //scan FAT/ExFAT path
+    if (strncmp (job->spath, "fat", 3) == 0)
+    {
+        job->stype = FS_TFAT;
+        NPrintf ("job:scanning fat path %s\n", job->spath);
+        return fat_job_scan (job, job->spath + 3);
+    }
+    //scan EXT path
+    else if (strncmp (job->spath, "ext", 3) == 0)
+    {
+        job->stype = FS_TEXT;
+        return 1;//ext_scan_path (p);
+    }
+    //scan NTFS path
+    else if (strncmp (job->spath, "ntfs", 4) == 0)
+    {
+        job->stype = FS_TNTFS;
+        return 1;//ntfs_scan_path (p);
+    }
+    //scan sys path
+    else
+    {
+        job->stype = FS_TSYS;
+        NPrintf ("job:scanning sys path %s\n", job->spath);
+        return sys_job_scan (job, job->spath + 4);
+    }
+    return 0;
+}
 
 //probe for supported FSs on various devices
 int rootfs_probe ()
@@ -327,6 +367,102 @@ int fat_scan_path (struct fm_panel *p)
         ;//DPrintf("!unable to open path '%s' result %d\n", path, res);
     }
     f_mount (NULL, lpath, 0);                    /* UnMount the default drive */
+    //
+    return res;
+}
+
+int sys_job_scan (struct fm_job *p, char *path)
+{
+    char lp[256];
+	int dfd;
+	u64 read;
+	sysFSDirent dir;
+    int res = sysLv2FsOpenDir (path, &dfd);
+    if (res)
+    {
+        NPrintf ("!failed sysLv2FsOpenDir path %s, res %d\n", path, res);
+		return res;
+    }
+    for (; !sysLv2FsReadDir (dfd, &dir, &read); )
+    {
+		if (!read)
+			break;
+		if (!strcmp (dir.d_name, ".") || !strcmp (dir.d_name, ".."))
+			continue;
+        //
+        snprintf (lp, 255, "%s/%s", path, dir.d_name);
+        if (dir.d_type & DT_DIR)
+        {
+            //fm_job_add (p, dir.d_name, 1, 0);
+            fm_job_add (p, lp, 1, 0);
+            //recurse
+            sys_job_scan (p, lp);
+        }
+        else
+        {
+            sysFSStat stat;
+            res = sysLv2FsStat (lp, &stat);
+            //NPrintf ("sysLv2FsStat for '%s', res %d\n", lp, res);
+            if (res >= 0)
+                //fm_job_add (p, dir.d_name, 0, stat.st_size);
+                fm_job_add (p, lp, 0, stat.st_size);
+            else
+                //fm_job_add (p, dir.d_name, 0, -1);
+                fm_job_add (p, lp, 0, -1);
+        }
+    }
+    sysLv2FsCloseDir (dfd);
+    //
+    return 0;
+}
+
+int fat_job_scan (struct fm_job *p, char *path)
+{
+    char lp[256];
+    FRESULT res;
+    FDIR dir;
+    static FILINFO fno;
+    FATFS fs;     /* Ponter to the filesystem object */
+    res = f_mount (&fs, path, 0);                    /* Mount the default drive */
+    //if (res != FR_OK) //??
+    //    return res;
+    //strip the 'fat' preffix on path from 'fat0:/' to '0:/'
+    res = f_opendir (&dir, path);                       /* Open the directory */
+    NPrintf ("job:scanning fat path %s, res %d\n", path, res);
+    //
+    if (res == FR_OK)
+    {
+        for (;;)
+        {
+            FRESULT res1 = f_readdir (&dir, &fno);                   /* Read a directory item */
+            if (res1 != FR_OK || fno.fname[0] == 0) 
+                break;  /* Break on error or end of dir */
+            snprintf (lp, 255, "%s/%s", path, fno.fname);
+            if (fno.fattrib & AM_DIR) 
+            {                    /* It is a directory */
+                //fm_job_add (p, fno.fname, 1, 0);
+                fm_job_add (p, lp, 1, 0);
+                //recurse
+                fat_job_scan (p, lp);
+            } 
+            else 
+            {                                       /* It is a file. */
+                //NPrintf ("FAT f_stat for '%s', res %d\n", lp, res);
+                if (f_stat (lp, &fno) == FR_OK)
+                    //fm_job_add (p, fno.fname, 0, fno.fsize);
+                    fm_job_add (p, lp, 0, fno.fsize);
+                else
+                    //fm_job_add (p, fno.fname, 0, -1);
+                    fm_job_add (p, lp, 0, -1);
+            }
+        }
+        f_closedir (&dir);
+    }
+    else
+    {
+        ;//DPrintf("!unable to open path '%s' result %d\n", path, res);
+    }
+    f_mount (NULL, path, 0);                    /* UnMount the default drive */
     //
     return res;
 }

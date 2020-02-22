@@ -31,12 +31,36 @@ struct fm_panel {
     //
     int x, y, w, h;             //position+dimentions
     char active;                //panel is active or not
-    char fs_type;
+    char fs_type;               //file system type for panel
     //
     int files;
     int dirs;
     unsigned long long fsize;
 };
+
+struct fm_job {
+    char *spath;                //current path - full path, including drive identifier
+    char *dpath;                //current path - full path, including drive identifier
+    struct fm_file *entries;    //entries
+    //
+    char stype;                 //file system type for source
+    char dtype;                 //file system type for destination
+    //
+    int files;
+    int dirs;
+    unsigned long long fsize;
+};
+
+//list file management job
+int fm_job_list (char *path);
+int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz);
+//clear file management job
+int fm_job_clear (struct fm_job *job);
+
+//draw (4) status messages
+int fm_status_draw (int dat);
+//set status message for index
+int fm_status_set (char *sm, int idx, int col);
 
 int fm_panel_enter (struct fm_panel *p);
 int fm_panel_exit (struct fm_panel *p);

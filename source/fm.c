@@ -15,6 +15,42 @@
 #include "fsutil.h"
 #include "console.h"
 
+//status message
+static char *s_msg[STATUS_H] = {NULL, NULL, NULL, NULL};
+//status message text color
+static int c_msg[STATUS_H] = {-1, -1, -1, -1};
+//set status message for intex idx
+int fm_status_set (char * sm, int idx, int col)
+{
+    if (idx < 0 || idx > STATUS_H - 1)
+        return -1;
+    if (s_msg[idx])
+        free (s_msg[idx]);
+    if (sm)
+        s_msg[idx] = strdup (sm);
+    else
+        s_msg[idx] = NULL;
+    c_msg[idx] = col;
+    return 0;
+}
+
+int fm_status_draw (int dat)
+{
+    SetCurrentFont (2);
+    SetFontSize (8, 8);
+    //title - current path
+    SetFontAutoCenter (0);
+    int i;
+    for (i = 0; i < STATUS_H; i++)
+    {
+        if (c_msg[i] != -1)
+            SetFontColor (c_msg[i], 0x00000000);
+        if (s_msg[i])
+            DrawString (0, (PANEL_H + i) * 8, s_msg[i]);
+    }
+    return 0;
+}
+
 //enter current dir
 int fm_panel_enter (struct fm_panel *p)
 {
@@ -73,6 +109,103 @@ int fm_panel_clear (struct fm_panel *p)
     p->files = 0;
     p->dirs = 0;
     p->fsize = 0;
+    //
+    return 0;
+}
+
+int fm_job_clear (struct fm_job *job)
+{
+    struct fm_file *ptr;
+    for (ptr = job->entries; ptr != NULL; ptr = job->entries)
+    {
+        job->entries = ptr->next;
+        if (ptr->name)
+            free (ptr->name);
+        free (ptr);
+    }
+    //
+    if (job->spath)
+        free (job->spath);
+    job->spath = NULL;
+    if (job->dpath)
+        free (job->dpath);
+    job->dpath = NULL;
+    //
+    job->files = 0;
+    job->dirs = 0;
+    job->fsize = 0;
+    //
+    return 0;
+}
+
+int fm_job_list (char *path)
+{
+    struct fm_job fmjob;
+    struct fm_job *job = &fmjob;
+    //
+    job->spath = strdup (path);
+    job->dpath = NULL;
+    job->stype = FS_TNONE;
+    job->dtype = FS_TNONE;
+    //
+    job->entries = NULL;
+    //
+    job->files = 0;
+    job->dirs = 0;
+    job->fsize = 0;
+    //
+    fs_job_scan (job);
+    char lp[256];
+    snprintf (lp, 256, "job scan %dfiles, %ddirs, %llubytes", job->files, job->dirs, job->fsize);
+    fm_status_set (lp, 0, 0xeeeeeeFF);
+    //
+    struct fm_file *ptr;
+    for (ptr = job->entries; ptr != NULL; ptr = ptr->next)
+    {
+        NPrintf ("job %d> %08lu> %s\n", ptr->dir, ptr->size, ptr->name);
+    }
+    //
+    fm_job_clear (job);
+    //
+    return 0;
+}
+
+int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz)
+{
+    // Allocate memory for new node;
+    struct fm_file *link = (struct fm_file*) malloc (sizeof (struct fm_file));
+    if (!link)
+        return -1;
+    //
+    link->name = strdup (fn);
+    link->dir = dir;
+    link->size = fsz;
+    //
+    link->prev = NULL;
+    link->next = NULL;
+    NPrintf ("fm_job_add %d>%s\n", dir, fn);
+    //stats
+    if (fsz > 0)
+        p->fsize += fsz;
+    if (dir)
+        p->dirs++;
+    else
+        p->files++;
+    // If head is empty, create new list
+    if (p->entries == NULL)
+    {
+        p->entries = link;
+    }
+    else
+    {
+        struct fm_file *current = p->entries;
+        // move to the end of the list
+        while (current->next != NULL)
+            current = current->next;
+        // Insert link at the end of the list
+        current->next = link;
+        link->prev = current;
+    }
     //
     return 0;
 }
