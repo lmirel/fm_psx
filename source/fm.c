@@ -159,11 +159,13 @@ int fm_job_list (char *path)
     snprintf (lp, 256, "job scan %dfiles, %ddirs, %llubytes", job->files, job->dirs, job->fsize);
     fm_status_set (lp, 0, 0xeeeeeeFF);
     //
+    #if 1
     struct fm_file *ptr;
     for (ptr = job->entries; ptr != NULL; ptr = ptr->next)
     {
-        NPrintf ("job %d> %08lu> %s\n", ptr->dir, ptr->size, ptr->name);
+        NPrintf ("job %d> %8luB> %s\n", ptr->dir, ptr->size, ptr->name);
     }
+    #endif
     //
     fm_job_clear (job);
     //
@@ -175,7 +177,10 @@ int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz)
     // Allocate memory for new node;
     struct fm_file *link = (struct fm_file*) malloc (sizeof (struct fm_file));
     if (!link)
+    {
+        NPrintf ("!fm_job_add malloc failed for %d>%s\n", dir, fn);
         return -1;
+    }
     //
     link->name = strdup (fn);
     link->dir = dir;

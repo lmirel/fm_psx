@@ -96,9 +96,18 @@ int fs_job_scan (struct fm_job *job)
     //scan FAT/ExFAT path
     if (strncmp (job->spath, "fat", 3) == 0)
     {
+        FATFS fs;     /* Ponter to the filesystem object */
+        int res = f_mount (&fs, job->spath + 3, 0);                    /* Mount the default drive */
+        if (res != FR_OK)
+        {
+            NPrintf ("!job:failed mounting fat path %s, res %d\n", job->spath, res);
+            return res;
+        }
         job->stype = FS_TFAT;
         NPrintf ("job:scanning fat path %s\n", job->spath);
-        return fat_job_scan (job, job->spath + 3);
+        res = fat_job_scan (job, job->spath + 3);
+        f_mount (NULL, job->spath + 3, 0);                    /* UnMount the default drive */
+        return res;
     }
     //scan EXT path
     else if (strncmp (job->spath, "ext", 3) == 0)
@@ -329,7 +338,7 @@ int fat_scan_path (struct fm_panel *p)
     char lp[256];
     FRESULT res;
     FDIR dir;
-    static FILINFO fno;
+    FILINFO fno;
     FATFS fs;     /* Ponter to the filesystem object */
     char *lpath = p->path + 3;
     res = f_mount (&fs, lpath, 0);                    /* Mount the default drive */
@@ -377,12 +386,22 @@ int sys_job_scan (struct fm_job *p, char *path)
 	int dfd;
 	u64 read;
 	sysFSDirent dir;
+    sysFSStat stat;
     int res = sysLv2FsOpenDir (path, &dfd);
     if (res)
     {
-        NPrintf ("!failed sysLv2FsOpenDir path %s, res %d\n", path, res);
+        //NPrintf ("!failed sysLv2FsOpenDir path %s, res %d\n", path, res);
+        //add file
+        res = sysLv2FsStat (path, &stat);
+        //NPrintf ("sysLv2FsStat for '%s', res %d\n", lp, res);
+        if (res >= 0)
+            //fm_job_add (p, dir.d_name, 0, stat.st_size);
+            fm_job_add (p, path, 0, stat.st_size);
 		return res;
     }
+    //add dir
+    fm_job_add (p, path, 1, 0);
+    //
     for (; !sysLv2FsReadDir (dfd, &dir, &read); )
     {
 		if (!read)
@@ -394,13 +413,12 @@ int sys_job_scan (struct fm_job *p, char *path)
         if (dir.d_type & DT_DIR)
         {
             //fm_job_add (p, dir.d_name, 1, 0);
-            fm_job_add (p, lp, 1, 0);
+            //fm_job_add (p, lp, 1, 0);
             //recurse
             sys_job_scan (p, lp);
         }
         else
         {
-            sysFSStat stat;
             res = sysLv2FsStat (lp, &stat);
             //NPrintf ("sysLv2FsStat for '%s', res %d\n", lp, res);
             if (res >= 0)
@@ -421,12 +439,30 @@ int fat_job_scan (struct fm_job *p, char *path)
     char lp[256];
     FRESULT res;
     FDIR dir;
-    static FILINFO fno;
-    FATFS fs;     /* Ponter to the filesystem object */
-    res = f_mount (&fs, path, 0);                    /* Mount the default drive */
-    //if (res != FR_OK) //??
-    //    return res;
-    //strip the 'fat' preffix on path from 'fat0:/' to '0:/'
+    FILINFO fno;
+#if 1
+    //file or dir?
+    res = f_stat (path, &fno);
+    if (res != FR_OK)
+    {
+        NPrintf ("!job:f_stat fat path %s, res %d\n", path, res);
+        return res;
+    }
+    if (fno.fattrib & AM_DIR)
+    {
+        //add dir - already added
+        fm_job_add (p, path, 1, 0);
+    }
+    else
+    {
+        //add file
+        fm_job_add (p, path, 0, fno.fsize);
+        f_mount (NULL, path, 0);                    /* UnMount the default drive */
+        //
+        return res;
+    }
+#endif
+    //open dir
     res = f_opendir (&dir, path);                       /* Open the directory */
     NPrintf ("job:scanning fat path %s, res %d\n", path, res);
     //
@@ -435,13 +471,17 @@ int fat_job_scan (struct fm_job *p, char *path)
         for (;;)
         {
             FRESULT res1 = f_readdir (&dir, &fno);                   /* Read a directory item */
-            if (res1 != FR_OK || fno.fname[0] == 0) 
+            if (res1 != FR_OK || fno.fname[0] == 0)
+            {
+                //NPrintf ("job:done f_readdir fat path %s, res1 %d\n", path, res1);
                 break;  /* Break on error or end of dir */
+            }
             snprintf (lp, 255, "%s/%s", path, fno.fname);
+            //NPrintf ("job:processing %s\n", lp);
             if (fno.fattrib & AM_DIR) 
             {                    /* It is a directory */
                 //fm_job_add (p, fno.fname, 1, 0);
-                fm_job_add (p, lp, 1, 0);
+                //fm_job_add (p, lp, 1, 0);
                 //recurse
                 fat_job_scan (p, lp);
             } 
@@ -460,9 +500,8 @@ int fat_job_scan (struct fm_job *p, char *path)
     }
     else
     {
-        ;//DPrintf("!unable to open path '%s' result %d\n", path, res);
+        NPrintf("job:!unable to open path '%s' result %d\n", path, res);
     }
-    f_mount (NULL, path, 0);                    /* UnMount the default drive */
     //
     return res;
 }
