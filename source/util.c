@@ -5,9 +5,44 @@
 #include <string.h>
 #include <time.h>
 
+#include "pad.h"
 
 #define S_PI 3.14159265f
 #define D_PI 6.28318531f
+
+
+int NPad (int btn)
+{
+	if (new_pad & btn)
+		return 1;
+	return 0;
+}
+
+int PPad (int btn)
+{
+	if (old_pad & btn)
+        return 1;
+	return 0;
+}
+
+#define PPAD_SKIP   5   //skip old pad report every 5 calls to reduce speed
+int APad (int btn)
+{
+    static int pps = PPAD_SKIP;
+	if (NPad(btn))
+    {
+        pps = PPAD_SKIP;
+		return 1;
+    }
+	if (PPad(btn))
+    {
+        if (pps--)
+            return 0;
+        pps = PPAD_SKIP;
+        return 1;
+    }
+	return 0;
+}
 
 void DrawRect2d (float x, float y, float z, float w, float h, u32 rgba)
 {

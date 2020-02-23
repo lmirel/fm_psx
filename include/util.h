@@ -12,3 +12,6 @@
 
 int fps_update ();
 void DrawRect2d (float x, float y, float z, float w, float h, u32 rgba);
+int NPad (int btn);
+int PPad (int btn);
+int APad (int btn);

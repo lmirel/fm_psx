@@ -86,6 +86,33 @@ if(find_device==11) sprintf(filename, "/dev_bdvd");
             if(flags & ASYNC_NTFS) ps3ntfs_close(v->fd); else sysLv2FsClose(v->fd);
 
  */
+int fs_get_fstype (char *path)
+{
+    if (!path)
+        return FS_TNONE;
+    //FAT/ExFAT path
+    if (strncmp (path, "fat", 3) == 0)
+    {
+        return FS_TFAT;
+    }
+    //EXT path
+    else if (strncmp (path, "ext", 3) == 0)
+    {
+        return FS_TEXT;
+    }
+    //NTFS path
+    else if (strncmp (path, "ntfs", 4) == 0)
+    {
+        return FS_TNTFS;
+    }
+    //sys path
+    else if (strncmp (path, "sys", 3) == 0)
+    {
+        return FS_TSYS;
+    }
+    //
+    return FS_TNONE;
+}
 int fs_job_scan (struct fm_job *job)
 {
     if (!job->spath)
@@ -93,40 +120,43 @@ int fs_job_scan (struct fm_job *job)
         job->stype = FS_TNONE;
         return -1;
     }
-    //scan FAT/ExFAT path
-    if (strncmp (job->spath, "fat", 3) == 0)
+    job->stype = fs_get_fstype (job->spath);
+    switch (job->stype)
     {
-        FATFS fs;     /* Ponter to the filesystem object */
-        int res = f_mount (&fs, job->spath + 3, 0);                    /* Mount the default drive */
-        if (res != FR_OK)
+        //scan FAT/ExFAT path
+        //if (strncmp (job->spath, "fat", 3) == 0)
+        case FS_TFAT:
         {
-            NPrintf ("!job:failed mounting fat path %s, res %d\n", job->spath, res);
+            FATFS fs;     /* Ponter to the filesystem object */
+            int res = f_mount (&fs, job->spath + 3, 0);                    /* Mount the default drive */
+            if (res != FR_OK)
+            {
+                NPrintf ("!job:failed mounting fat path %s, res %d\n", job->spath, res);
+                return res;
+            }
+            NPrintf ("job:scanning fat path %s\n", job->spath);
+            res = fat_job_scan (job, job->spath + 3);
+            f_mount (NULL, job->spath + 3, 0);                    /* UnMount the default drive */
             return res;
         }
-        job->stype = FS_TFAT;
-        NPrintf ("job:scanning fat path %s\n", job->spath);
-        res = fat_job_scan (job, job->spath + 3);
-        f_mount (NULL, job->spath + 3, 0);                    /* UnMount the default drive */
-        return res;
-    }
-    //scan EXT path
-    else if (strncmp (job->spath, "ext", 3) == 0)
-    {
-        job->stype = FS_TEXT;
-        return 1;//ext_scan_path (p);
-    }
-    //scan NTFS path
-    else if (strncmp (job->spath, "ntfs", 4) == 0)
-    {
-        job->stype = FS_TNTFS;
-        return 1;//ntfs_scan_path (p);
-    }
-    //scan sys path
-    else
-    {
-        job->stype = FS_TSYS;
-        NPrintf ("job:scanning sys path %s\n", job->spath);
-        return sys_job_scan (job, job->spath + 4);
+        //scan EXT path
+        //else if (strncmp (job->spath, "ext", 3) == 0)
+        case FS_TEXT:
+        {
+            return 1;//ext_scan_path (p);
+        }
+        //scan NTFS path
+        //else if (strncmp (job->spath, "ntfs", 4) == 0)
+        case FS_TNTFS:
+        {
+            return 1;//ntfs_scan_path (p);
+        }
+        //scan sys path
+        case FS_TSYS:
+        {
+            NPrintf ("job:scanning sys path %s\n", job->spath);
+            return sys_job_scan (job, job->spath + 4);
+        }
     }
     return 0;
 }
@@ -263,31 +293,34 @@ int fs_path_scan (struct fm_panel *p)
         p->fs_type = FS_TNONE;
         return root_scan_path (p);
     }
-    //scan FAT/ExFAT path
-    if (strncmp (p->path, "fat", 3) == 0)
+    p->fs_type = fs_get_fstype (p->path);
+    switch (p->fs_type)
     {
-        p->fs_type = FS_TFAT;
-        NPrintf ("scanning fat path %s\n", p->path);
-        return fat_scan_path (p);
-    }
-    //scan EXT path
-    else if (strncmp (p->path, "ext", 3) == 0)
-    {
-        p->fs_type = FS_TEXT;
-        return 1;//ext_scan_path (p);
-    }
-    //scan NTFS path
-    else if (strncmp (p->path, "ntfs", 4) == 0)
-    {
-        p->fs_type = FS_TNTFS;
-        return 1;//ntfs_scan_path (p);
-    }
-    //scan sys path
-    else
-    {
-        p->fs_type = FS_TSYS;
-        NPrintf ("scanning sys path %s\n", p->path);
-        return sys_scan_path (p);
+        //scan FAT/ExFAT path
+        //if (strncmp (p->path, "fat", 3) == 0)
+        case FS_TFAT:
+        {
+            NPrintf ("scanning fat path %s\n", p->path);
+            return fat_scan_path (p);
+        }
+        //scan EXT path
+        //else if (strncmp (p->path, "ext", 3) == 0)
+        case FS_TEXT:
+        {
+            return 1;//ext_scan_path (p);
+        }
+        //scan NTFS path
+        //else if (strncmp (p->path, "ntfs", 4) == 0)
+        case FS_TNTFS:
+        {
+            return 1;//ntfs_scan_path (p);
+        }
+        //scan sys path
+        case FS_TSYS:
+        {
+            NPrintf ("scanning sys path %s\n", p->path);
+            return sys_scan_path (p);
+        }
     }
     return 0;
 }

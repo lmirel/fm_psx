@@ -172,6 +172,47 @@ int fm_job_list (char *path)
     return 0;
 }
 
+int fm_file_copy (struct fm_job *job)
+{
+    struct fm_file *ptr;
+    for (ptr = job->entries; ptr != NULL; ptr = ptr->next)
+    {
+        NPrintf ("job %d> %8luB> %s\n", ptr->dir, ptr->size, ptr->name);
+    }
+    return 0;
+}
+
+int fm_job_copy (char *src, char *dst)
+{
+    struct fm_job fmjob;
+    struct fm_job *job = &fmjob;
+    //
+    if (!src || !dst)
+        return -1;
+    //
+    job->spath = strdup (src);
+    job->dpath = strdup (dst);
+    job->stype = FS_TNONE;
+    job->dtype = FS_TNONE;
+    //
+    job->entries = NULL;
+    //
+    job->files = 0;
+    job->dirs = 0;
+    job->fsize = 0;
+    //
+    fs_job_scan (job);
+    char lp[256];
+    snprintf (lp, 256, "job: copy %dfiles, %ddirs, %llubytes to %s", job->files, job->dirs, job->fsize, job->dpath);
+    fm_status_set (lp, 0, 0xeeeeeeFF);
+    //
+    fm_file_copy (job);
+    //
+    fm_job_clear (job);
+    //
+    return 0;
+}
+
 int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz)
 {
     // Allocate memory for new node;

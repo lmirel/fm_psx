@@ -32,6 +32,7 @@ extern unsigned char msx[];
 #include "fflib.h"
 #include "fm.h"
 #include "util.h"
+#include "pad.h"
 
 #define SDTEST
 #ifdef SDTEST
@@ -55,32 +56,14 @@ typedef struct {
 #include <lv2/sysfs.h>
 
 #include <sysutil/disc.h>
-
+#include <sysutil/sysutil.h>
 #include <sysmodule/sysmodule.h>
 //app
 int app_init (int dt);      //1
-int app_input (int dt);     //2
+//int app_input (int dt);     //2
 int app_update (int dt);    //3
 int app_render (int dt);    //4
 int app_cleanup (int dt);   //5
-//
-//pad buttons mask - for use in app
-#define PAD_R1_MASK         0x0001
-#define PAD_L1_MASK         0x0002
-#define PAD_R2_MASK         0x0004
-#define PAD_L2_MASK         0x0008
-#define PAD_CR_MASK         0x0010
-#define PAD_SQ_MASK         0x0020
-#define PAD_CI_MASK         0x0040
-#define PAD_TR_MASK         0x0080
-#define PAD_SE_MASK         0x0100
-#define PAD_ST_MASK         0x0200
-#define PAD_R3_MASK         0x0400
-#define PAD_L3_MASK         0x0800
-#define PAD_UP_MASK         0x1000
-#define PAD_DN_MASK         0x2000
-#define PAD_LT_MASK         0x4000
-#define PAD_RT_MASK         0x8000
 //
 struct fm_panel lp, rp;
 //
@@ -384,8 +367,8 @@ int file_write_perf (int idx)
             break; /* error or disk full */
         //usleep (100000);
         DPrintf ("..%d ", k + 1);
-        if (app_input(0) & PAD_CI_MASK)
-            break;
+        //if (app_input(0) & PAD_CI_MASK)
+        //    break;
         DbgDraw ();
         tiny3d_Flip ();
     }
@@ -420,8 +403,8 @@ int file_write_perf (int idx)
             if (fr || bw == 0)
                 break; /* error or eof */
             DPrintf ("..%d ", k + 1);
-            if (app_input(0) & PAD_CI_MASK)
-                break;
+            //if (app_input(0) & PAD_CI_MASK)
+            //    break;
             DbgDraw ();
             tiny3d_Flip ();
         }
@@ -499,9 +482,9 @@ int file_new(char *fname)
     while(1)
     {
         //2 input
-        btn = app_input(0);
-        if (btn & PAD_CI_MASK)
-            break;
+        //btn = app_input(0);
+        //if (btn & PAD_CI_MASK)
+        //    break;
         //3
 		//4
         DbgDraw();
@@ -574,9 +557,9 @@ int dir_run(char *dname)
     while(1)
     {
         //2 input
-        btn = app_input(0);
-        if (btn & PAD_CI_MASK)
-            break;
+        //btn = app_input(0);
+        //if (btn & PAD_CI_MASK)
+        //   break;
         //3
 		//4
         DbgDraw();
@@ -640,9 +623,9 @@ int file_run(char *fname)
     while(1)
     {
         //2 input
-        btn = app_input(0);
-        if (btn & PAD_CI_MASK)
-            break;
+        //btn = app_input(0);
+        //if (btn & PAD_CI_MASK)
+        //    break;
         //3
 		//4
         DbgDraw();
@@ -651,11 +634,18 @@ int file_run(char *fname)
     return 0;
 }
 //app
-struct fm_panel *app_active_panel()
+struct fm_panel *app_active_panel ()
 {
     if (lp.active)
         return &lp;
     return &rp;
+}
+
+struct fm_panel *app_inactive_panel ()
+{
+    if (lp.active)
+        return &rp;
+    return &lp;
 }
 //restore app state after other module was executed
 int _app_restore (char init)
@@ -695,7 +685,6 @@ int app_init (int dt)
     LoadTexture ();
     //
     DbgHeader("FATFS EXFAT Example");
-    DbgMess("Press x/cross to exit");
     //
     fm_panel_scan (&lp, NULL);
     fm_panel_scan (&rp, NULL);
@@ -707,135 +696,58 @@ int app_init (int dt)
     //
     return 1;
 }
-//2nd
-#if 0
-from
-unsigned int BTN_LEFT : 1;      /*!< \brief left button */
-unsigned int BTN_DOWN : 1;      /*!< \brief down button */
-unsigned int BTN_RIGHT : 1;     /*!< \brief right button */
-unsigned int BTN_UP : 1;        /*!< \brief up button */
-unsigned int BTN_START : 1;     /*!< \brief start button */
-unsigned int BTN_R3 : 1;        /*!< \brief R3 button */
-unsigned int BTN_L3 : 1;        /*!< \brief L3 button */
-unsigned int BTN_SELECT : 1;    /*!< \brief select button */
-unsigned int BTN_SQUARE : 1;    /*!< \brief square button */
-unsigned int BTN_CROSS : 1;     /*!< \brief cross button */
-unsigned int BTN_CIRCLE : 1;    /*!< \brief circle button */
-unsigned int BTN_TRIANGLE : 1;  /*!< \brief triangle button */
-unsigned int BTN_R1 : 1;        /*!< \brief R1 button */
-unsigned int BTN_L1 : 1;        /*!< \brief L1 button */
-unsigned int BTN_R2 : 1;        /*!< \brief R2 button */
-unsigned int BTN_L2 : 1;        /*!< \brief L2 button */ 
-to 
-#define PAD_R1_MASK         0x0001
-#define PAD_L1_MASK         0x0002
-#define PAD_R2_MASK         0x0004
-#define PAD_L2_MASK         0x0008
-#define PAD_CR_MASK         0x0010
-#define PAD_SQ_MASK         0x0020
-#define PAD_CI_MASK         0x0040
-#define PAD_TR_MASK         0x0080
-#define PAD_SE_MASK         0x0100
-#define PAD_ST_MASK         0x0200
-#define PAD_R3_MASK         0x0400
-#define PAD_L3_MASK         0x0800
-#define PAD_UP_MASK         0x1000
-#define PAD_DN_MASK         0x2000
-#define PAD_LT_MASK         0x4000
-#define PAD_RT_MASK         0x8000
-#endif
-int app_input(int dat)
-{
-	padInfo padinfo;
-	padData paddata;
-    int i;
-    int ret = 0;
-    // Check the pads.
-    ioPadGetInfo(&padinfo);
-
-    for(i = 0; i < MAX_PADS; i++)
-    {
-        if(padinfo.status[i])
-        {
-            ioPadGetData(i, &paddata);
-            //map buttons
-            if(paddata.BTN_UP)
-                ret |= PAD_UP_MASK;
-            if(paddata.BTN_DOWN)
-                ret |= PAD_DN_MASK;
-            if(paddata.BTN_LEFT)
-                ret |= PAD_LT_MASK;
-            if(paddata.BTN_RIGHT)
-                ret |= PAD_RT_MASK;
-            if(paddata.BTN_CROSS)
-                ret |= PAD_CR_MASK;
-            if(paddata.BTN_CIRCLE)
-                ret |= PAD_CI_MASK;
-            if(paddata.BTN_TRIANGLE)
-                ret |= PAD_TR_MASK;
-            if(paddata.BTN_SQUARE)
-                ret |= PAD_SQ_MASK;
-            if(paddata.BTN_START)
-                ret |= PAD_ST_MASK;
-            if(paddata.BTN_SELECT)
-                ret |= PAD_SE_MASK;
-            if(paddata.BTN_R1)
-                ret |= PAD_R1_MASK;
-            if(paddata.BTN_L1)
-                ret |= PAD_L1_MASK;
-            if(paddata.BTN_R2)
-                ret |= PAD_R2_MASK;
-            if(paddata.BTN_L2)
-                ret |= PAD_L2_MASK;
-        }
-    }
-    return ret;
-}
+//2nd input - skip, we read in app_update
 //3rd
 int app_update(int dat)
 {
     //2 input
-    int btn = app_input (0);
-    //quit?
-    if (btn & PAD_CI_MASK)
+    ps3pad_read ();
+    //go up
+    if (NPad (BUTTON_CIRCLE))
     {
-        if (fm_panel_exit (app_active_panel ()))
-            return -1;
+        //if (fm_panel_exit (app_active_panel ()))
+        fm_panel_exit (app_active_panel ());
+        //    return -1;
     }
     //activate left panel
-    else if(btn & PAD_L1_MASK)
+    else if (NPad (BUTTON_L1))
     {
         lp.active = 1;
         rp.active = 0;
     }
     //activate right panel
-    else if(btn & PAD_R1_MASK)
+    else if (NPad (BUTTON_R1))
     {
         lp.active = 0;
         rp.active = 1;
     }
     //scroll panel up
-    else if(btn & PAD_UP_MASK)
+    else if (APad (BUTTON_UP))
     {
         fm_panel_scroll (app_active_panel (), FALSE);
     }
     //scroll panel dn
-    else if(btn & PAD_DN_MASK)
+    else if (APad (BUTTON_DOWN))
     {
         fm_panel_scroll (app_active_panel (), TRUE);
     }
     //enter dir
-    else if(btn & PAD_RT_MASK)
+    else if (NPad (BUTTON_RIGHT))
     {
         fm_panel_enter (app_active_panel ());
     }
     //exit dir
-    else if(btn & PAD_LT_MASK)
+    else if (NPad (BUTTON_LEFT))
     {
         fm_panel_exit (app_active_panel ());
     }
-    //cross
-    else if(btn & PAD_CR_MASK)
+    //cross - action: enter dir
+    else if (NPad (BUTTON_CROSS))
+    {
+        fm_panel_enter (app_active_panel ());
+    }
+    //files delete
+    else if (NPad (BUTTON_TRIANGLE))
     {
         char lp[CBSIZE];
         struct fm_panel *p = app_active_panel ();
@@ -845,17 +757,19 @@ int app_update(int dat)
             fm_job_list (lp);
         }
     }
-    //file contents
-    else if(btn & PAD_TR_MASK)
+    //files copy
+    else if (NPad (BUTTON_SQUARE))
     {
-    }
-    //dir listing
-    else if(btn & PAD_SQ_MASK)
-    {
-    }
-    //file write
-    else if(btn & PAD_ST_MASK)
-    {
+        char sp[CBSIZE];
+        char dp[CBSIZE];
+        struct fm_panel *ps = app_active_panel ();
+        struct fm_panel *pd = app_inactive_panel ();
+        if (ps->path && pd->path)
+        {
+            snprintf (sp, CBSIZE, "%s/%s", ps->path, ps->current->name);
+            snprintf (dp, CBSIZE, "%s/", pd->path);
+            fm_job_copy (sp, dp);
+        }
     }
     //
     return 0;
@@ -869,12 +783,10 @@ int app_render(int dat)
     // Enable alpha Test
     tiny3d_AlphaTest(1, 0x10, TINY3D_ALPHA_FUNC_GEQUAL);
 
-   // Enable alpha blending.
-            tiny3d_BlendFunc(1, TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA | TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA,
-                TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA | TINY3D_BLEND_FUNC_DST_ALPHA_ZERO,
-                TINY3D_BLEND_RGB_FUNC_ADD | TINY3D_BLEND_ALPHA_FUNC_ADD);
-    //
-    //DbgDraw ();
+    // Enable alpha blending.
+    tiny3d_BlendFunc(1, TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA | TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA,
+        TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA | TINY3D_BLEND_FUNC_DST_ALPHA_ZERO,
+        TINY3D_BLEND_RGB_FUNC_ADD | TINY3D_BLEND_ALPHA_FUNC_ADD);
     // change to 2D context ( virtual size of the screen is 848.0 x 512.0)
     fm_panel_draw (&lp);
     fm_panel_draw (&rp);
@@ -907,7 +819,6 @@ s32 main(s32 argc, const char* argv[])
     //1 init
 	app_init (0);
     _app_restore (0);
-    app_input (0);
 	// Ok, everything is setup. Now for the main loop.
 	while(1) 
     {
