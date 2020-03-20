@@ -1,4 +1,6 @@
 //fm.h - simple file manager
+#ifndef __FM__
+#define __FM__
 
 #define KBSZ    (1024)          //KB: 1024
 #define MBSZ    (1048576)       //MB: 1024*1024
@@ -57,7 +59,7 @@ int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz);
 //clear file management job
 int fm_job_clear (struct fm_job *job);
 //copy files from source to destination
-int fm_job_copy (char *src, char *dst);
+int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt));
 
 //draw (4) status messages
 int fm_status_draw (int dat);
@@ -82,3 +84,5 @@ int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz);
 int fm_panel_del (struct fm_panel *p, char *fn);
 
 int fm_fname_get (struct fm_file *link, int cw, char *out);
+
+#endif

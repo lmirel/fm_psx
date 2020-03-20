@@ -71,7 +71,7 @@ extern char *strsep(char **stringp, const char *delim);
 
 #ifdef PS3_GEKKO
 
-#include "mem_allocate.h"
+//#include "mem_allocate.h"
 
 #define XATTR_CREATE 1 
 #define XATTR_REPLACE 2

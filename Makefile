@@ -10,8 +10,8 @@ endif
 #---------------------------------------------------------------------------------
 #  TITLE, APPID, CONTENTID, ICON0 SFOXML before ppu_rules.
 #---------------------------------------------------------------------------------
-TITLE		:=	FATFSlib Test
-APPID		:=	FATFS0001
+TITLE		:=	File Manager Test
+APPID		:=	PS3FM0001
 CONTENTID	:=	UP0001-$(APPID)_00-0000000000000000
 
 SCETOOL_FLAGS	?=	--self-app-version=0001000000000000  --sce-type=SELF --compress-data=TRUE --self-add-shdrs=TRUE --skip-sections=FALSE --key-revision=1 \
@@ -45,7 +45,7 @@ LIBS		:=	../lib/libfatfs.a -lsysfs -lfont -ltiny3d -lsimdmath -lgcm_sys -lnet -l
 # options for code generation
 #---------------------------------------------------------------------------------
 
-CFLAGS		=	-O2 -Wall -mcpu=cell $(MACHDEP) $(INCLUDE) -DPS3_GEKKO -DDEBUG_IP=\"192.168.2.185\"
+CFLAGS		=	-O2 -Wall -mcpu=cell $(MACHDEP) $(INCLUDE) -DPS3_GEKKO -DDEBUG_IP=\"192.168.2.191\"
 CXXFLAGS	=	$(CFLAGS)
 
 LDFLAGS		=	$(MACHDEP) -Wl,-Map,$(notdir $@).map

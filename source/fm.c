@@ -14,6 +14,10 @@
 #include "util.h"
 #include "fsutil.h"
 #include "console.h"
+#include "pad.h"
+
+#include <sys/file.h>
+#include "ff.h"
 
 //status message
 static char *s_msg[STATUS_H] = {NULL, NULL, NULL, NULL};
@@ -58,11 +62,11 @@ int fm_panel_enter (struct fm_panel *p)
     if (!p->current->dir)
         return -1;
     //move deeper
-    char np[256];
+    char np[CBSIZE];
     if (p->path && *p->path)
-        snprintf (np, 255, "%s/%s", p->path, p->current->name);
+        snprintf (np, CBSIZE, "%s/%s", p->path, p->current->name);
     else
-        snprintf (np, 255, "%s", p->current->name);
+        snprintf (np, CBSIZE, "%s", p->current->name);
     return fm_panel_scan (p, np);
     //
     return 0;
@@ -75,7 +79,7 @@ int fm_panel_exit (struct fm_panel *p)
     if (!p->path)
         return -1;
     //
-    char np[256];
+    char np[CBSIZE];
     char *lp = strrchr (p->path, '/');
     if (lp)
     {
@@ -89,7 +93,7 @@ int fm_panel_exit (struct fm_panel *p)
         //exit to rootfs
         return fm_panel_scan (p, NULL);
     //
-    snprintf (np, 255, "%s", p->path);
+    snprintf (np, CBSIZE, "%s", p->path);
     return fm_panel_scan (p, np);
 }
 
@@ -172,17 +176,254 @@ int fm_job_list (char *path)
     return 0;
 }
 
-int fm_file_copy (struct fm_job *job)
+int fm_file_copy (char *src, char *dst, char srct, char dstt, int (*ui_render)(int dt))
 {
-    struct fm_file *ptr;
-    for (ptr = job->entries; ptr != NULL; ptr = ptr->next)
+    FATFS fs;      /* Work area (filesystem object) for logical drives */
+    BYTE *buffer = NULL;    // File copy buffer
+    FIL f1src, f1dst;       // File objects
+    int ret = 0;
+    int f2src = -1, f2dst = -1;
+    u64 br, bw;
+    char src_ok = 0, dst_ok = 0;
+    //prep copy buffer
+    #define BSZ (3*MBSZ)
+    buffer = malloc (BSZ);
+    if (buffer == NULL)
     {
-        NPrintf ("job %d> %8luB> %s\n", ptr->dir, ptr->size, ptr->name);
+        DPrintf ("!failed to allocate buffer of %dbytes\n", BSZ);
+        return -1;
     }
-    return 0;
+    //prepare source
+    switch (srct)
+    {
+        case FS_TFAT:
+        {
+            f_mount(&fs, src, 0);
+            if (f_open (&f1src, src, FA_READ))
+            {
+                NPrintf ("!fm_file_copy: FAT src open %s\n", src);
+                ret = -1;
+            }
+            else
+                src_ok = 1;
+        }
+        break;
+        case FS_TSYS:
+        {
+            if (sysFsOpen (src, SYS_O_RDONLY, &f2src, NULL, 0))
+            {
+                NPrintf ("!fm_file_copy: SYS src open %s\n", src);
+	            ret = -1;
+            }
+            else
+                src_ok = 1;
+        }
+        break;
+        case FS_TEXT:
+        {
+            
+        }
+        break;
+        case FS_TNTFS:
+        {
+            
+        }
+        break;
+    }
+    //errors?
+    if (ret)
+    {
+        free (buffer);
+        return ret;
+    }
+    //prepare destination
+    switch (dstt)
+    {
+        case FS_TFAT:
+        {
+            f_mount(&fs, dst, 0);
+            if (f_open (&f1dst, dst, FA_WRITE | FA_CREATE_ALWAYS))
+            {
+                NPrintf ("!fm_file_copy: FAT dst create %s\n", dst);
+                ret = -1;
+            }
+            else
+                dst_ok = 1;
+        }
+        break;
+        case FS_TSYS:
+        {
+            if (sysLv2FsOpen (dst, SYS_O_WRONLY | SYS_O_CREAT | SYS_O_TRUNC, &f2dst, 0777, NULL, 0))
+            {
+                NPrintf ("!fm_file_copy: SYS dst create %s\n", dst);
+                ret = -1;
+            }
+            else
+                dst_ok = 1;
+        }
+        break;
+        case FS_TEXT:
+        {
+            
+        }
+        break;
+        case FS_TNTFS:
+        {
+            
+        }
+        break;
+    }
+    //ready to read+write
+    if (src_ok && dst_ok)
+    {
+        while (1)
+        {
+            //read data
+            switch (srct)
+            {
+                case FS_TFAT:
+                {
+                    if (f_read (&f1src, buffer, BSZ, (UINT *)&br))
+                    {
+                        NPrintf ("!fm_file_copy: FAT src read %s\n", src);
+                        ret = -1;
+                    }
+                }
+                break;
+                case FS_TSYS:
+                {
+                    if (sysLv2FsRead (f2src, buffer, BSZ, &br))
+                    {
+                        NPrintf ("!fm_file_copy: SYS src read %s\n", src);
+                        ret = -1;
+                    }
+                }
+                break;
+                case FS_TEXT:
+                {
+                    
+                }
+                break;
+                case FS_TNTFS:
+                {
+                    
+                }
+                break;
+            }
+            if (ret == -1 || br == 0)
+                break;
+            //write data
+            switch (dstt)
+            {
+                case FS_TFAT:
+                {
+                    if (f_write (&f1dst, buffer, (UINT)br, (UINT *)&bw))
+                    {
+                        NPrintf ("!fm_file_copy: FAT dst write %s\n", dst);
+                        ret = -1;
+                    }
+                }
+                break;
+                case FS_TSYS:
+                {
+                    if (sysLv2FsWrite (f2dst, buffer, br, &bw))
+                    {
+                        NPrintf ("!fm_file_copy: SYS dst write %s\n", dst);
+                        ret = -1;
+                    }
+                }
+                break;
+                case FS_TEXT:
+                {
+                    
+                }
+                break;
+                case FS_TNTFS:
+                {
+                    
+                }
+                break;
+            }
+            if (ret == -1 || br != bw)
+                break;
+            //render the app so we update the user on status
+            if (ui_render)
+                ui_render (1);
+            //cancel job?
+            ps3pad_read ();
+            if (NPad (BUTTON_CIRCLE))
+            {
+                ret = -2;
+                break;
+            }
+        }//while read
+    }//if all ok
+    //
+    free (buffer);
+    //close files
+    switch (srct)
+    {
+        case FS_TFAT:
+        {
+            if (src_ok)
+                f_close (&f1src);
+            f_mount (0, src, 0);
+        }
+        break;
+        case FS_TSYS:
+        {
+            if (src_ok)
+                sysLv2FsClose (f2src);
+        }
+        break;
+        case FS_TEXT:
+        {
+            
+        }
+        break;
+        case FS_TNTFS:
+        {
+            
+        }
+        break;
+    }
+    switch (dstt)
+    {
+        case FS_TFAT:
+        {
+            if (dst_ok)
+                f_close (&f1dst);
+            //remove file on error
+            if (ret != 0)
+                f_unlink (dst);
+            f_mount (0, dst, 0);
+        }
+        break;
+        case FS_TSYS:
+        {
+            if (dst_ok)
+                sysLv2FsClose (f2dst);
+            //remove file on error
+            if (ret != 0)
+                sysLv2FsUnlink (dst);
+        }
+        break;
+        case FS_TEXT:
+        {
+            
+        }
+        break;
+        case FS_TNTFS:
+        {
+            
+        }
+        break;
+    }
+    //
+    return ret;
 }
 
-int fm_job_copy (char *src, char *dst)
+int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
 {
     struct fm_job fmjob;
     struct fm_job *job = &fmjob;
@@ -202,11 +443,78 @@ int fm_job_copy (char *src, char *dst)
     job->fsize = 0;
     //
     fs_job_scan (job);
-    char lp[256];
-    snprintf (lp, 256, "job: copy %dfiles, %ddirs, %llubytes to %s", job->files, job->dirs, job->fsize, job->dpath);
-    fm_status_set (lp, 0, 0xeeeeeeFF);
+    //restore source location
+    char *lbp = strrchr (src, '/');
+    if (lbp)
+        *lbp = 0;
+    else
+    {
+        //we have a HUUUGE problem here, bail out
+        fm_job_clear (job);
+    }
+    free (job->spath);
+    job->spath = strdup (src);
     //
-    fm_file_copy (job);
+    char lp[CBSIZE];
+    char dp[CBSIZE];
+    snprintf (lp, CBSIZE, "job: copy %dfiles, %ddirs, %llubytes to %s from %s", job->files, job->dirs, job->fsize, job->dpath, job->spath);
+    fm_status_set (lp, 0, 0xeeeeeeFF);
+    //TODO: check for space at destination
+    //copy file from source to dest
+    struct fm_file *ptr;
+    int ktr = 1;
+    int spp = strlen (job->spath);
+    int nsp, ndp;
+    //adjust source path prefix to remove FS type like fat, ntfs, ext, sys
+    job->stype = fs_get_fstype (src, &nsp);
+    if (job->stype > FS_TNONE)
+        spp -= nsp;
+    job->dtype = fs_get_fstype (dst, &ndp);
+    //
+    for (ptr = job->entries; ptr != NULL; ptr = ptr->next)
+    {
+        if (ptr->dir)
+            snprintf (lp, CBSIZE, "job: process %d/%d dir %s", ktr, job->files + job->dirs, ptr->name);
+        else
+            snprintf (lp, CBSIZE, "job: process %d/%d file %s", ktr, job->files + job->dirs, ptr->name);
+        fm_status_set (lp, 1, 0xffeeeeFF);
+        //prep destination
+        snprintf (dp, CBSIZE, "%s%s", job->dpath + ndp, ptr->name + spp);
+        //same file?
+        NPrintf ("job %d> %8luB> %s to %s\n", ptr->dir, ptr->size, ptr->name, dp);
+        if (strcmp (dp, ptr->name) == 0)
+        {
+            snprintf (lp, CBSIZE, "job: same file/dir, skip %s", dp);
+            fm_status_set (lp, 2, 0xffff00FF);
+        }
+        else
+        {
+            if (ptr->dir)
+            {
+                snprintf (lp, CBSIZE, "job: create dir %s", dp);
+                fm_status_set (lp, 2, 0xffffeeFF);
+                //create dir
+            }
+            else
+            {
+                snprintf (lp, CBSIZE, "job: copy file to %s", dp);
+                fm_status_set (lp, 2, 0xffffeeFF);
+                //copy file
+                fm_file_copy (ptr->name, dp, job->stype, job->dtype, ui_render);
+            }
+        }
+        //
+        ktr++;
+        //render the app so we update the user on status
+        if (ui_render)
+            ui_render (1);
+        //cancel job?
+        ps3pad_read ();
+        if (NPad (BUTTON_CIRCLE))
+        {
+            break;
+        }
+    }
     //
     fm_job_clear (job);
     //

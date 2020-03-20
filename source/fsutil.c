@@ -86,33 +86,43 @@ if(find_device==11) sprintf(filename, "/dev_bdvd");
             if(flags & ASYNC_NTFS) ps3ntfs_close(v->fd); else sysLv2FsClose(v->fd);
 
  */
-int fs_get_fstype (char *path)
+// np is normalized path offset, from path fat0:/abc/ means np is 3 such that norm path is path + 3 -> 0:/abc/
+int fs_get_fstype (char *path, int *np)
 {
     if (!path)
         return FS_TNONE;
     //FAT/ExFAT path
     if (strncmp (path, "fat", 3) == 0)
     {
+        if (np)
+            *np = 3;
         return FS_TFAT;
     }
     //EXT path
     else if (strncmp (path, "ext", 3) == 0)
     {
+        if (np)
+            *np = 3;
         return FS_TEXT;
     }
     //NTFS path
     else if (strncmp (path, "ntfs", 4) == 0)
     {
+        if (np)
+            *np = 4;
         return FS_TNTFS;
     }
     //sys path
-    else if (strncmp (path, "sys", 3) == 0)
+    else if (strncmp (path, "sys:", 4) == 0)
     {
+        if (np)
+            *np = 4;
         return FS_TSYS;
     }
     //
     return FS_TNONE;
 }
+
 int fs_job_scan (struct fm_job *job)
 {
     if (!job->spath)
@@ -120,7 +130,8 @@ int fs_job_scan (struct fm_job *job)
         job->stype = FS_TNONE;
         return -1;
     }
-    job->stype = fs_get_fstype (job->spath);
+    int npo = 0;
+    job->stype = fs_get_fstype (job->spath, &npo);
     switch (job->stype)
     {
         //scan FAT/ExFAT path
@@ -128,15 +139,16 @@ int fs_job_scan (struct fm_job *job)
         case FS_TFAT:
         {
             FATFS fs;     /* Ponter to the filesystem object */
-            int res = f_mount (&fs, job->spath + 3, 0);                    /* Mount the default drive */
+            char *nsrc = job->spath + npo;
+            int res = f_mount (&fs, nsrc, 0);                    /* Mount the default drive */
             if (res != FR_OK)
             {
                 NPrintf ("!job:failed mounting fat path %s, res %d\n", job->spath, res);
                 return res;
             }
             NPrintf ("job:scanning fat path %s\n", job->spath);
-            res = fat_job_scan (job, job->spath + 3);
-            f_mount (NULL, job->spath + 3, 0);                    /* UnMount the default drive */
+            res = fat_job_scan (job, nsrc);
+            f_mount (NULL, nsrc, 0);                    /* UnMount the default drive */
             return res;
         }
         //scan EXT path
@@ -155,7 +167,7 @@ int fs_job_scan (struct fm_job *job)
         case FS_TSYS:
         {
             NPrintf ("job:scanning sys path %s\n", job->spath);
-            return sys_job_scan (job, job->spath + 4);
+            return sys_job_scan (job, job->spath + npo);
         }
     }
     return 0;
@@ -293,7 +305,7 @@ int fs_path_scan (struct fm_panel *p)
         p->fs_type = FS_TNONE;
         return root_scan_path (p);
     }
-    p->fs_type = fs_get_fstype (p->path);
+    p->fs_type = fs_get_fstype (p->path, NULL);
     switch (p->fs_type)
     {
         //scan FAT/ExFAT path
@@ -483,7 +495,7 @@ int fat_job_scan (struct fm_job *p, char *path)
     }
     if (fno.fattrib & AM_DIR)
     {
-        //add dir - already added
+        //add dir
         fm_job_add (p, path, 1, 0);
     }
     else

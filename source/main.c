@@ -477,7 +477,7 @@ int file_new(char *fname)
     //
     file_create (fname);
     //
-    int btn = 0;
+    //int btn = 0;
     //
     while(1)
     {
@@ -552,7 +552,7 @@ int dir_run(char *dname)
     //
     dir_read (dname);
     //
-    int btn = 0;
+    //int btn = 0;
     //
     while(1)
     {
@@ -618,7 +618,7 @@ int file_run(char *fname)
     //
     file_read (fname);
     //
-    int btn = 0;
+    //int btn = 0;
     //
     while(1)
     {
@@ -768,7 +768,7 @@ int app_update(int dat)
         {
             snprintf (sp, CBSIZE, "%s/%s", ps->path, ps->current->name);
             snprintf (dp, CBSIZE, "%s/", pd->path);
-            fm_job_copy (sp, dp);
+            fm_job_copy (sp, dp, &app_render);
         }
     }
     //

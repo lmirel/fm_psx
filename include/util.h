@@ -1,4 +1,7 @@
 //util.h
+#ifndef __UTIL__
+#define __UTIL__
+
 #include <tiny3d.h>
 
 // change to 2D context ( virtual size of the screen is 848.0 x 512.0)
@@ -15,3 +18,5 @@ void DrawRect2d (float x, float y, float z, float w, float h, u32 rgba);
 int NPad (int btn);
 int PPad (int btn);
 int APad (int btn);
+
+#endif
