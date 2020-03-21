@@ -13,6 +13,8 @@
 
 #define CBSIZE  256     //char buffer size
 
+int DrawDialogYesNo (char * str);
+
 int fps_update ();
 void DrawRect2d (float x, float y, float z, float w, float h, u32 rgba);
 int NPad (int btn);

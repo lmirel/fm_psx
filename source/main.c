@@ -749,12 +749,12 @@ int app_update(int dat)
     //files delete
     else if (NPad (BUTTON_TRIANGLE))
     {
-        char lp[CBSIZE];
-        struct fm_panel *p = app_active_panel ();
-        if (p->path)
+        char sp[CBSIZE];
+        struct fm_panel *ps = app_active_panel ();
+        if (ps->path)
         {
-            snprintf (lp, CBSIZE, "%s/%s", p->path, p->current->name);
-            fm_job_list (lp);
+            snprintf (sp, CBSIZE, "%s/%s", ps->path, ps->current->name);
+            fm_job_delete (sp, &app_render);
         }
     }
     //files copy

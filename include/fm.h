@@ -58,9 +58,10 @@ int fm_job_list (char *path);
 int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz);
 //clear file management job
 int fm_job_clear (struct fm_job *job);
-//copy files from source to destination
+//copy files/dirs from source to destination
 int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt));
-
+//remove files/dirs from source
+int fm_job_delete (char *src, int (*ui_render)(int dt));
 //draw (4) status messages
 int fm_status_draw (int dat);
 //set status message for index

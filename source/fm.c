@@ -176,17 +176,20 @@ int fm_job_list (char *path)
     return 0;
 }
 
-int fm_file_copy (char *src, char *dst, char srct, char dstt, int (*ui_render)(int dt))
+int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long ssz, int (*ui_render)(int dt))
 {
     FATFS fs;      /* Work area (filesystem object) for logical drives */
     BYTE *buffer = NULL;    // File copy buffer
     FIL f1src, f1dst;       // File objects
     int ret = 0;
-    int f2src = -1, f2dst = -1;
+    int f2src, f2dst;
     u64 br, bw;
     char src_ok = 0, dst_ok = 0;
+    unsigned long long dsz = 0;
+    time_t times, timee;    //start end/time
+    char lp[CBSIZE];
     //prep copy buffer
-    #define BSZ (3*MBSZ)
+    #define BSZ (5*MBSZ)
     buffer = malloc (BSZ);
     if (buffer == NULL)
     {
@@ -276,6 +279,7 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, int (*ui_render)(i
     //ready to read+write
     if (src_ok && dst_ok)
     {
+        time (&times);
         while (1)
         {
             //read data
@@ -283,11 +287,13 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, int (*ui_render)(i
             {
                 case FS_TFAT:
                 {
-                    if (f_read (&f1src, buffer, BSZ, (UINT *)&br))
+                    UINT lbr;
+                    if (f_read (&f1src, buffer, BSZ, &lbr))
                     {
                         NPrintf ("!fm_file_copy: FAT src read %s\n", src);
                         ret = -1;
                     }
+                    br = lbr;
                 }
                 break;
                 case FS_TSYS:
@@ -310,6 +316,8 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, int (*ui_render)(i
                 }
                 break;
             }
+            if (br == 0)
+                NPrintf ("fm_file_copy: read 0B/EOF from %s\n", src);
             if (ret == -1 || br == 0)
                 break;
             //write data
@@ -317,11 +325,13 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, int (*ui_render)(i
             {
                 case FS_TFAT:
                 {
-                    if (f_write (&f1dst, buffer, (UINT)br, (UINT *)&bw))
+                    UINT lbw;
+                    if (f_write (&f1dst, buffer, (UINT)br, &lbw))
                     {
                         NPrintf ("!fm_file_copy: FAT dst write %s\n", dst);
                         ret = -1;
                     }
+                    bw = lbw;
                 }
                 break;
                 case FS_TSYS:
@@ -344,8 +354,28 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, int (*ui_render)(i
                 }
                 break;
             }
-            if (ret == -1 || br != bw)
+            if (br != bw)
+            {
+                NPrintf ("!fm_file_copy: read %lluB wrote %lluB\n", br, bw);
+                ret = -1;
+            }
+            if (ret == -1)
                 break;
+            //stats
+            dsz += bw;
+            time (&timee);
+            if (timee == times) //avoid fault division by zero
+                timee++;
+            //performance
+            uint mbps = (dsz / MBSZ) / (timee - times);
+            //time left
+            //xM .. ySEC > tM .. ?SEC >> 
+            uint etae = 0;
+            if (ssz && mbps)
+                etae = (ssz - dsz) / MBSZ / mbps;
+            //report stats
+            snprintf (lp, CBSIZE, "copy progress: %uMB of %uMB (%d%%) %uMBps %usec left", (uint)(dsz/MBSZ), (uint)(ssz/MBSZ), (uint)(ssz?dsz*100/ssz:0), mbps, etae);
+            fm_status_set (lp, 3, 0xffff00FF);
             //render the app so we update the user on status
             if (ui_render)
                 ui_render (1);
@@ -394,7 +424,7 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, int (*ui_render)(i
             if (dst_ok)
                 f_close (&f1dst);
             //remove file on error
-            if (ret != 0)
+            if (ret)
                 f_unlink (dst);
             f_mount (0, dst, 0);
         }
@@ -404,7 +434,7 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, int (*ui_render)(i
             if (dst_ok)
                 sysLv2FsClose (f2dst);
             //remove file on error
-            if (ret != 0)
+            if (ret)
                 sysLv2FsUnlink (dst);
         }
         break;
@@ -427,6 +457,7 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
 {
     struct fm_job fmjob;
     struct fm_job *job = &fmjob;
+    int ret = 0;
     //
     if (!src || !dst)
         return -1;
@@ -457,9 +488,13 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
     //
     char lp[CBSIZE];
     char dp[CBSIZE];
-    snprintf (lp, CBSIZE, "job: copy %dfiles, %ddirs, %llubytes to %s from %s", job->files, job->dirs, job->fsize, job->dpath, job->spath);
+    snprintf (lp, CBSIZE, "job: copy %dfiles, %ddirs, %lluMB to %s from %s", job->files, job->dirs, job->fsize/MBSZ, job->dpath, job->spath);
     fm_status_set (lp, 0, 0xeeeeeeFF);
     //TODO: check for space at destination
+    snprintf (lp, CBSIZE, "Do you want to copy the selected files and folders?\n\n(%i) items, %uMB", job->files + job->dirs, (uint)(job->fsize/MBSZ));
+    if (1 != DrawDialogYesNo(lp))
+        return fm_job_clear (job);
+
     //copy file from source to dest
     struct fm_file *ptr;
     int ktr = 1;
@@ -478,7 +513,7 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
         else
             snprintf (lp, CBSIZE, "job: process %d/%d file %s", ktr, job->files + job->dirs, ptr->name);
         fm_status_set (lp, 1, 0xffeeeeFF);
-        //prep destination
+        //prep destination, skip FS prefix
         snprintf (dp, CBSIZE, "%s%s", job->dpath + ndp, ptr->name + spp);
         //same file?
         NPrintf ("job %d> %8luB> %s to %s\n", ptr->dir, ptr->size, ptr->name, dp);
@@ -494,14 +529,53 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
                 snprintf (lp, CBSIZE, "job: create dir %s", dp);
                 fm_status_set (lp, 2, 0xffffeeFF);
                 //create dir
+                switch (job->dtype)
+                {
+                    case FS_TFAT:
+                    {
+                        FATFS fs;      /* Work area (filesystem object) for logical drives */
+                        f_mount (&fs, dp, 0);
+                        snprintf (lp, CBSIZE, "job: FAT create dir %s", dp);
+                        fm_status_set (lp, 2, 0xffffeeFF);
+                        //remove file/dir
+                        if ((ret = f_mkdir (dp)))
+                            NPrintf ("!fm_job_copy: FAT can't create dir %s, res %d\n", dp, ret);
+                        //unmount
+                        f_mount (0, dp, 0);
+                    }
+                    break;
+                    case FS_TSYS:
+                    {
+                        if ((ret = sysLv2FsMkdir (dp, 0777)))
+                            NPrintf ("!fm_job_copy: SYS can't create dir %s, res %d\n", dp, ret);
+                    }
+                    break;
+                    case FS_TEXT:
+                    {
+                        
+                    }
+                    break;
+                    case FS_TNTFS:
+                    {
+                        
+                    }
+                    break;
+                }
             }
             else
             {
                 snprintf (lp, CBSIZE, "job: copy file to %s", dp);
                 fm_status_set (lp, 2, 0xffffeeFF);
                 //copy file
-                fm_file_copy (ptr->name, dp, job->stype, job->dtype, ui_render);
+                ret = fm_file_copy (ptr->name, dp, job->stype, job->dtype, ptr->size, ui_render);
             }
+        }
+        if (ret == -2)
+        {
+            //canceled
+            snprintf (lp, CBSIZE, "copy job CANCELED");
+            fm_status_set (lp, 3, 0xffff00FF);
+            break;
         }
         //
         ktr++;
@@ -512,6 +586,134 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
         ps3pad_read ();
         if (NPad (BUTTON_CIRCLE))
         {
+            //canceled
+            snprintf (lp, CBSIZE, "copy job CANCELED");
+            fm_status_set (lp, 3, 0xffff00FF);
+            break;
+        }
+    }
+    //
+    fm_job_clear (job);
+    //
+    return 0;
+}
+
+int fm_job_delete (char *src, int (*ui_render)(int dt))
+{
+    struct fm_job fmjob;
+    struct fm_job *job = &fmjob;
+    int ret;
+    //
+    if (!src)
+        return -1;
+    //
+    job->spath = strdup (src);
+    job->dpath = NULL;
+    job->stype = FS_TNONE;
+    job->dtype = FS_TNONE;
+    //
+    job->entries = NULL;
+    //
+    job->files = 0;
+    job->dirs = 0;
+    job->fsize = 0;
+    //
+    fs_job_scan (job);
+    //restore source location
+    char *lbp = strrchr (src, '/');
+    if (lbp)
+        *lbp = 0;
+    else
+    {
+        //we have a HUUUGE problem here, bail out
+        fm_job_clear (job);
+    }
+    free (job->spath);
+    job->spath = strdup (src);
+    //
+    char lp[CBSIZE];
+    snprintf (lp, CBSIZE, "job: delete %dfiles, %ddirs, %lluMB from %s", job->files, job->dirs, job->fsize/MBSZ, job->spath);
+    fm_status_set (lp, 0, 0xeeeeeeFF);
+    //remove files - 2do: show dialog box for confirmation
+    snprintf (lp, CBSIZE, "Do you want to delete the selected Files and Folders?\n\n(%i) items, %uMB", job->files + job->dirs, (uint)(job->fsize/MBSZ));
+    if (1 != DrawDialogYesNo(lp))
+        return fm_job_clear (job);
+    //
+    struct fm_file *ptr, *ptail = NULL;
+    int ktr = 1;
+    int nsp;
+    //adjust source path prefix to remove FS type like fat, ntfs, ext, sys
+    job->stype = fs_get_fstype (src, &nsp);
+    //find the last entry and move backwards such that we remove files first, then remove dirs
+    for (ptr = job->entries; ptr != NULL; ptr = ptr->next)
+        ptail = ptr;
+    //reverse removal
+    for (ptr = ptail; ptr != NULL; ptr = ptr->prev)
+    {
+        if (ptr->dir)
+            snprintf (lp, CBSIZE, "job: process %d/%d dir %s", ktr, job->files + job->dirs, ptr->name);
+        else
+            snprintf (lp, CBSIZE, "job: process %d/%d file %s", ktr, job->files + job->dirs, ptr->name);
+        fm_status_set (lp, 1, 0xffeeeeFF);
+        NPrintf ("%s\n", lp);
+        //
+        switch (job->stype)
+        {
+            case FS_TFAT:
+            {
+                FATFS fs;      /* Work area (filesystem object) for logical drives */
+                f_mount (&fs, ptr->name, 0);
+                snprintf (lp, CBSIZE, "job: FAT delete file/dir %s", ptr->name);
+                fm_status_set (lp, 2, 0xffffeeFF);
+                //remove file/dir
+                if ((ret = f_unlink (ptr->name)))
+                    NPrintf ("!fm_job_delete: FAT can't remove file/dir %s, res %d\n", ptr->name, ret);
+                //unmount
+                f_mount (0, ptr->name, 0);
+            }
+            break;
+            case FS_TSYS:
+            {
+                snprintf (lp, CBSIZE, "job: SYS delete file/dir %s", ptr->name);
+                fm_status_set (lp, 2, 0xffffeeFF);
+                //
+                if (ptr->dir)
+                {
+                    if ((ret = sysLv2FsUnlink (ptr->name)))
+                        NPrintf ("!fm_job_delete: SYS can't remove file %s, res %d\n", ptr->name, ret);
+                }
+                else
+                {
+                    if ((ret = sysLv2FsRmdir (ptr->name)))
+                        NPrintf ("!fm_job_delete: SYS can't remove dir %s, res %d\n", ptr->name, ret);
+                }
+                snprintf (lp, CBSIZE, "job: SYS delete file/dir %s - %s", ptr->name, ret?"KO":"OK");
+                fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+            }
+            break;
+            case FS_TEXT:
+            {
+                
+            }
+            break;
+            case FS_TNTFS:
+            {
+                
+            }
+            break;
+        }        //
+        //
+        ktr++;
+        //render the app so we update the user on status
+        if (ui_render)
+            ui_render (1);
+        //cancel job?
+        ps3pad_read ();
+        if (NPad (BUTTON_CIRCLE))
+        {
+            //canceled
+            snprintf (lp, CBSIZE, "delete job CANCELED");
+            fm_status_set (lp, 3, 0xffff00FF);
             break;
         }
     }
@@ -659,11 +861,11 @@ int fm_panel_draw (struct fm_panel *p)
         if (!ptr->dir)
         {
             if (ptr->size > GBSZ)
-                snprintf (fname, 7, "%4luGB", ptr->size / GBSZ);
+                snprintf (fname, 52, "%4luGB", ptr->size / GBSZ);
             else if (ptr->size > MBSZ)
-                snprintf (fname, 7, "%4luMB", ptr->size / MBSZ);
+                snprintf (fname, 52, "%4luMB", ptr->size / MBSZ);
             else
-                snprintf (fname, 7, "%4luKB", ptr->size / KBSZ);
+                snprintf (fname, 52, "%4luKB", ptr->size / KBSZ);
             DrawString (p->x + 8 + (46 * 8), p->y + 8 + k * 8, fname);
         }
     }
