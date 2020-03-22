@@ -130,35 +130,6 @@ void my_dialog2(msgButton button, void *userdata)
     }
 }
 
-static volatile int progress_action2 = 0;
-
-static float bar1_countparts = 0.0f, bar2_countparts = 0.0f;
-
-char extension[10];
-char progress_bar_title[256];
-
-static msgType mdialogprogress = MSG_DIALOG_SINGLE_PROGRESSBAR | MSG_DIALOG_MUTE_ON | MSG_DIALOG_DISABLE_CANCEL_ON | MSG_DIALOG_BKG_INVISIBLE;
-static msgType mdialogprogress2 = MSG_DIALOG_DOUBLE_PROGRESSBAR | MSG_DIALOG_MUTE_ON;
-
-static void progress_callback(msgButton button, void *userdata)
-{
-    switch(button)
-    {
-        case MSG_DIALOG_BTN_OK:
-            progress_action2 = 1;
-            break;
-        case MSG_DIALOG_BTN_NO:
-        case MSG_DIALOG_BTN_ESCAPE:
-            progress_action2 = 2;
-            break;
-        case MSG_DIALOG_BTN_NONE:
-            progress_action2 = -1;
-            break;
-        default:
-            break;
-    }
-}
-
 void wait_dialog()
 {
     while(!dialog_action)
@@ -214,7 +185,7 @@ int DrawDialogYesNoTimer(char * str, float milliseconds)
     return dialog_action;
 }
 
-int DrawDialogYesNo(char * str)
+int YesNoDialog(char * str)
 {
     dialog_action = 0;
 
@@ -259,12 +230,36 @@ int DrawDialogYesNo2(char * str)
     return dialog_action;
 }
 
-int DrawProgressDialog ()
-{
-    progress_action2 = 0;
+//progress bar dialog box
+static volatile int progress_action = 0;
 
-    bar1_countparts = 0.0f;
-    bar2_countparts = 0.0f;
+static msgType mdialogprogress = MSG_DIALOG_SINGLE_PROGRESSBAR | MSG_DIALOG_MUTE_ON | MSG_DIALOG_DISABLE_CANCEL_ON | MSG_DIALOG_BKG_INVISIBLE;
+static msgType mdialogprogress2 = MSG_DIALOG_DOUBLE_PROGRESSBAR | MSG_DIALOG_MUTE_ON;
+
+static void progress_callback(msgButton button, void *userdata)
+{
+    switch(button)
+    {
+        //case MSG_DIALOG_BTN_OK:
+        case MSG_DIALOG_BTN_YES:
+            progress_action = 1;
+            break;
+        case MSG_DIALOG_BTN_NO:
+        case MSG_DIALOG_BTN_ESCAPE:
+            progress_action = 2;
+            break;
+        case MSG_DIALOG_BTN_NONE:
+        case MSG_DIALOG_BTN_INVALID:
+            progress_action = -1;
+            break;
+        default:
+            break;
+    }
+}
+
+int DrawProgressDialogTest (char *progress_bar_title)
+{
+    progress_action = 0;
 
     msgDialogOpen2(mdialogprogress2, progress_bar_title, progress_callback, (void *) 0xadef0045, NULL);
 
@@ -279,21 +274,50 @@ int DrawProgressDialog ()
     return 0;
 }
 
-static volatile int progress_action = 0;
-
-void DrawUpdateBar(u32 cpart)
+static u32 prev_prc0 = 0;
+static u32 prev_prc1 = 0;
+void ProgressBarUpdate(u32 cprc, const char *msg)
 {
-    msgDialogProgressBarInc(MSG_PROGRESSBAR_INDEX0, (u32) cpart);
-    sysUtilCheckCallback(); tiny3d_Flip();
+    if (msg)
+    {
+        msgDialogProgressBarSetMsg (MSG_PROGRESSBAR_INDEX0, msg);
+    }
+    if (cprc > prev_prc0)
+    {
+        msgDialogProgressBarInc (MSG_PROGRESSBAR_INDEX0, cprc - prev_prc0);
+        prev_prc0 = cprc;
+    }
+    else if (cprc < prev_prc0)
+    {
+        msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX0);
+        prev_prc0 = 0;
+    }
+    sysUtilCheckCallback();
+    tiny3d_Flip();
 }
 
-void DrawUpdateBar2(u32 cpart)
+void ProgressBar2Update(u32 cprc, const char *msg)
 {
-    msgDialogProgressBarInc(MSG_PROGRESSBAR_INDEX1, (u32) cpart);
-    sysUtilCheckCallback(); tiny3d_Flip();
+    if (msg)
+    {
+        msgDialogProgressBarSetMsg (MSG_PROGRESSBAR_INDEX1, msg);
+    }
+    if (cprc > prev_prc1)
+    {
+        msgDialogProgressBarInc (MSG_PROGRESSBAR_INDEX1, cprc - prev_prc1);
+        prev_prc1 = cprc;
+    }
+    else if (cprc < prev_prc1)
+    {
+        msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX1);
+        prev_prc1 = 0;
+    }
+    //
+    sysUtilCheckCallback();
+    tiny3d_Flip();
 }
 
-void DrawSingleBar(char *caption)
+void SingleProgressBarDialog(char *caption)
 {
     progress_action = 0;
 
@@ -301,22 +325,46 @@ void DrawSingleBar(char *caption)
 
     msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX0);
 
-    sysUtilCheckCallback();tiny3d_Flip();
+    sysUtilCheckCallback();
+    tiny3d_Flip();
 }
 
-static float progress_0 = 0.0f;
-
-void DrawDoubleBar(char *caption)
+void DoubleProgressBarDialog(char *caption)
 {
     progress_action = 0;
+    prev_prc0 = 0;
+    prev_prc1 = 0;
 
     msgDialogOpen2(mdialogprogress2, caption, progress_callback, (void *) 0xadef0042, NULL);
 
+    msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX0, "");
+    msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX1, "");
     msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX0);
     msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX1);
 
-    progress_0 = 0.0f;
-    sysUtilCheckCallback();tiny3d_Flip();
+    //2
+    sysUtilCheckCallback();
+    tiny3d_Flip();
+
+    //3
+    //Update message and progress
+    //msgDialogProgressBarInc(MSG_PROGRESSBAR_INDEX0, (u32) percent);
+    //msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX0, msg);
+    //msgDialogProgressBarInc(MSG_PROGRESSBAR_INDEX1, (u32) percent);
+    //msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX1, msg);
+    //sysUtilCheckCallback();
+    //tiny3d_Flip();
+
+    //4: 1 = OK, YES; 2 = NO/ESC/CANCEL; -1 = NONE
+    //if(ProgressBarActionGet() == 2) break;
+
+    //5
+    //msgDialogAbort();
+}
+
+int ProgressBarActionGet ()
+{
+    return progress_action;
 }
 
 #if 0

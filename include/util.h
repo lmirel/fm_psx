@@ -13,7 +13,13 @@
 
 #define CBSIZE  256     //char buffer size
 
-int DrawDialogYesNo (char * str);
+//dialog
+int YesNoDialog (char * str);
+//progress dialog
+int ProgressBarActionGet ();
+void DoubleProgressBarDialog(char *caption);
+void ProgressBarUpdate(u32 cprc, const char *msg);
+void ProgressBar2Update(u32 cprc, const char *msg);
 
 int fps_update ();
 void DrawRect2d (float x, float y, float z, float w, float h, u32 rgba);

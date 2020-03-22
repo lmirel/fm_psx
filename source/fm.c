@@ -9,6 +9,9 @@
 
 #include <tiny3d.h>
 #include <libfont.h>
+#include <sys/file.h>
+#include <sysutil/msg.h>
+#include <sysutil/sysutil.h>
 
 #include "fm.h"
 #include "util.h"
@@ -16,7 +19,6 @@
 #include "console.h"
 #include "pad.h"
 
-#include <sys/file.h>
 #include "ff.h"
 
 //status message
@@ -189,7 +191,7 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
     time_t times, timee;    //start end/time
     char lp[CBSIZE];
     //prep copy buffer
-    #define BSZ (5*MBSZ)
+    #define BSZ (3*MBSZ)
     buffer = malloc (BSZ);
     if (buffer == NULL)
     {
@@ -277,6 +279,7 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
         break;
     }
     //ready to read+write
+    ProgressBar2Update (0, NULL);  //reset
     if (src_ok && dst_ok)
     {
         time (&times);
@@ -374,8 +377,18 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
             if (ssz && mbps)
                 etae = (ssz - dsz) / MBSZ / mbps;
             //report stats
-            snprintf (lp, CBSIZE, "copy progress: %uMB of %uMB (%d%%) %uMBps %usec left", (uint)(dsz/MBSZ), (uint)(ssz/MBSZ), (uint)(ssz?dsz*100/ssz:0), mbps, etae);
+            u32 cprc = ssz ? dsz * 100 / ssz : 0;
+            snprintf (lp, CBSIZE, "%uMB of %uMB (%u%%) %uMBps %usec left", (uint)(dsz/MBSZ), (uint)(ssz/MBSZ), cprc, mbps, etae);
             fm_status_set (lp, 3, 0xffff00FF);
+            //msgDialogProgressBarSetMsg (MSG_PROGRESSBAR_INDEX1, lp);
+            ProgressBar2Update (cprc, lp);  //also handles flipping
+            //4: 1 = OK, YES; 2 = NO/ESC/CANCEL; -1 = NONE
+            if (ProgressBarActionGet() == 2)
+            {
+                ret = -2;
+                break;
+            }
+            #if 0
             //render the app so we update the user on status
             if (ui_render)
                 ui_render (1);
@@ -386,6 +399,7 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
                 ret = -2;
                 break;
             }
+            #endif
         }//while read
     }//if all ok
     //
@@ -488,13 +502,23 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
     //
     char lp[CBSIZE];
     char dp[CBSIZE];
-    snprintf (lp, CBSIZE, "job: copy %dfiles, %ddirs, %lluMB to %s from %s", job->files, job->dirs, job->fsize/MBSZ, job->dpath, job->spath);
-    fm_status_set (lp, 0, 0xeeeeeeFF);
     //TODO: check for space at destination
-    snprintf (lp, CBSIZE, "Do you want to copy the selected files and folders?\n\n(%i) items, %uMB", job->files + job->dirs, (uint)(job->fsize/MBSZ));
-    if (1 != DrawDialogYesNo(lp))
+    //SYS
+    //sysFsGetFreeSize(temp_buffer, &blockSize, &freeSize);
+    //freeSize = (((u64)blockSize * freeSize));
+    //NTFS
+    //struct statvfs vfs;
+    //ps3ntfs_statvfs(temp_buffer, &vfs);
+    //freeSize = (((u64)vfs.f_bsize * vfs.f_bfree));
+    //FAT
+    //
+    snprintf (lp, CBSIZE, "Do you want to copy the selected files and folders?\n\n%u items, %uMB", job->files + job->dirs, (uint)(job->fsize/MBSZ));
+    if (1 != YesNoDialog (lp))
         return fm_job_clear (job);
-
+    //
+    snprintf (lp, CBSIZE, "copy job: %dfiles, %ddirs, %lluMB to %s", job->files, job->dirs, job->fsize/MBSZ, job->dpath);
+    fm_status_set (lp, 0, 0xeeeeeeFF);
+    DoubleProgressBarDialog (lp);
     //copy file from source to dest
     struct fm_file *ptr;
     int ktr = 1;
@@ -508,13 +532,19 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
     //
     for (ptr = job->entries; ptr != NULL; ptr = ptr->next)
     {
-        if (ptr->dir)
-            snprintf (lp, CBSIZE, "job: process %d/%d dir %s", ktr, job->files + job->dirs, ptr->name);
-        else
-            snprintf (lp, CBSIZE, "job: process %d/%d file %s", ktr, job->files + job->dirs, ptr->name);
-        fm_status_set (lp, 1, 0xffeeeeFF);
         //prep destination, skip FS prefix
         snprintf (dp, CBSIZE, "%s%s", job->dpath + ndp, ptr->name + spp);
+        //
+        if (ptr->dir)
+            snprintf (lp, CBSIZE, "task %d/%d create dir %s", ktr, job->files + job->dirs, dp);
+        else
+            snprintf (lp, CBSIZE, "task %d/%d copy file to %s", ktr, job->files + job->dirs, dp);
+        fm_status_set (lp, 1, 0xffeeeeFF);
+        //3
+        //Update message and progress
+        //msgDialogProgressBarSetMsg (MSG_PROGRESSBAR_INDEX0, lp);
+        //msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX1, msg);
+        ProgressBarUpdate ((u32)(ktr * 100/(job->files + job->dirs)), lp);
         //same file?
         NPrintf ("job %d> %8luB> %s to %s\n", ptr->dir, ptr->size, ptr->name, dp);
         if (strcmp (dp, ptr->name) == 0)
@@ -526,8 +556,9 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
         {
             if (ptr->dir)
             {
-                snprintf (lp, CBSIZE, "job: create dir %s", dp);
+                snprintf (lp, CBSIZE, "create %s", dp);
                 fm_status_set (lp, 2, 0xffffeeFF);
+                ProgressBar2Update (0, lp);
                 //create dir
                 switch (job->dtype)
                 {
@@ -561,10 +592,11 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
                     }
                     break;
                 }
+                ProgressBar2Update (100, NULL);
             }
             else
             {
-                snprintf (lp, CBSIZE, "job: copy file to %s", dp);
+                snprintf (lp, CBSIZE, "copy file to %s", dp);
                 fm_status_set (lp, 2, 0xffffeeFF);
                 //copy file
                 ret = fm_file_copy (ptr->name, dp, job->stype, job->dtype, ptr->size, ui_render);
@@ -579,6 +611,10 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
         }
         //
         ktr++;
+        //4: 1 = OK, YES; 2 = NO/ESC/CANCEL; -1 = NONE
+        if (ProgressBarActionGet() == 2)
+            break;
+        #if 0
         //render the app so we update the user on status
         if (ui_render)
             ui_render (1);
@@ -591,7 +627,10 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
             fm_status_set (lp, 3, 0xffff00FF);
             break;
         }
+        #endif
     }
+    //
+    msgDialogAbort();
     //
     fm_job_clear (job);
     //
@@ -632,12 +671,13 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
     job->spath = strdup (src);
     //
     char lp[CBSIZE];
-    snprintf (lp, CBSIZE, "job: delete %dfiles, %ddirs, %lluMB from %s", job->files, job->dirs, job->fsize/MBSZ, job->spath);
-    fm_status_set (lp, 0, 0xeeeeeeFF);
     //remove files - 2do: show dialog box for confirmation
-    snprintf (lp, CBSIZE, "Do you want to delete the selected Files and Folders?\n\n(%i) items, %uMB", job->files + job->dirs, (uint)(job->fsize/MBSZ));
-    if (1 != DrawDialogYesNo(lp))
+    snprintf (lp, CBSIZE, "Do you want to delete the selected Files and Folders?\n\n%u items, %uMB", job->files + job->dirs, (uint)(job->fsize/MBSZ));
+    if (1 != YesNoDialog(lp))
         return fm_job_clear (job);
+    snprintf (lp, CBSIZE, "delete job: %dfiles, %ddirs, %lluMB from %s", job->files, job->dirs, job->fsize/MBSZ, job->spath);
+    fm_status_set (lp, 0, 0xeeeeeeFF);
+    DoubleProgressBarDialog (lp);
     //
     struct fm_file *ptr, *ptail = NULL;
     int ktr = 1;
@@ -651,11 +691,13 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
     for (ptr = ptail; ptr != NULL; ptr = ptr->prev)
     {
         if (ptr->dir)
-            snprintf (lp, CBSIZE, "job: process %d/%d dir %s", ktr, job->files + job->dirs, ptr->name);
+            snprintf (lp, CBSIZE, "task %d/%d delete dir %s", ktr, job->files + job->dirs, ptr->name);
         else
-            snprintf (lp, CBSIZE, "job: process %d/%d file %s", ktr, job->files + job->dirs, ptr->name);
+            snprintf (lp, CBSIZE, "task %d/%d delete file %s", ktr, job->files + job->dirs, ptr->name);
         fm_status_set (lp, 1, 0xffeeeeFF);
+        ProgressBarUpdate ((u32)(ktr * 100/(job->files + job->dirs)), lp);
         NPrintf ("%s\n", lp);
+        ProgressBar2Update (0, NULL);  //reset
         //
         switch (job->stype)
         {
@@ -702,8 +744,13 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
             }
             break;
         }        //
+        ProgressBar2Update (100, NULL);  //reset
         //
         ktr++;
+        //4: 1 = OK, YES; 2 = NO/ESC/CANCEL; -1 = NONE
+        if (ProgressBarActionGet() == 2)
+            break;
+        #if 0
         //render the app so we update the user on status
         if (ui_render)
             ui_render (1);
@@ -716,7 +763,10 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
             fm_status_set (lp, 3, 0xffff00FF);
             break;
         }
+        #endif
     }
+    //
+    msgDialogAbort();
     //
     fm_job_clear (job);
     //
