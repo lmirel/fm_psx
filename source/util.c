@@ -1,4 +1,5 @@
 //util.c
+#include <stdio.h>
 #include <unistd.h>
 #include <math.h>
 #include <string.h>
@@ -8,11 +9,13 @@
 #include <sysutil/sysutil.h>
 
 #include "util.h"
+#include "rsxutil.h"
 #include "pad.h"
 
 #define S_PI 3.14159265f
 #define D_PI 6.28318531f
 
+char *na_string = "n/a";
 
 int NPad (int btn)
 {
@@ -130,40 +133,46 @@ void my_dialog2(msgButton button, void *userdata)
     }
 }
 
-void wait_dialog()
+void do_flip ()
+{
+    sysUtilCheckCallback ();
+    flip ();
+    tiny3d_Flip ();
+}
+
+void wait_dialog ()
 {
     while(!dialog_action)
     {
-        sysUtilCheckCallback();
-        tiny3d_Flip();
+        do_flip ();
     }
 
-    msgDialogAbort();
-    usleep(100000);
+    msgDialogAbort ();
+    usleep (100000);
 }
 
-void DrawDialogOKTimer(char * str, float milliseconds)
+void OKTimerDialog (char * str, float milliseconds)
 {
     dialog_action = 0;
 
-    msgDialogOpen2(mdialogok, str, my_dialog2, (void*) 0x0000aaab, NULL );
-    msgDialogClose(milliseconds);
+    msgDialogOpen2 (mdialogok, str, my_dialog2, (void*) 0x0000aaab, NULL );
+    msgDialogClose (milliseconds);
 
-    wait_dialog();
+    wait_dialog ();
 }
 
 
-void DrawDialogOK(char * str)
+void OKDialog (char * str)
 {
     dialog_action = 0;
 
-    msgDialogOpen2(mdialogok, str, my_dialog2, (void*) 0x0000aaab, NULL );
+    msgDialogOpen2 (mdialogok, str, my_dialog2, (void*) 0x0000aaab, NULL );
 
-    wait_dialog();
+    wait_dialog ();
 }
 
 
-void DrawDialogTimer(char * str, float milliseconds)
+void TimerDialog (char * str, float milliseconds)
 {
     dialog_action = 0;
 
@@ -173,14 +182,14 @@ void DrawDialogTimer(char * str, float milliseconds)
     wait_dialog();
 }
 
-int DrawDialogYesNoTimer(char * str, float milliseconds)
+int YesNoTimerDialog (char * str, float milliseconds)
 {
     dialog_action = 0;
 
-    msgDialogOpen2(mdialogyesno, str, my_dialog, (void*)  0x0000aaaa, NULL );
-    msgDialogClose(milliseconds);
+    msgDialogOpen2 (mdialogyesno, str, my_dialog, (void*)  0x0000aaaa, NULL );
+    msgDialogClose (milliseconds);
 
-    wait_dialog();
+    wait_dialog ();
 
     return dialog_action;
 }
@@ -196,7 +205,7 @@ int YesNoDialog(char * str)
     return dialog_action;
 }
 
-int DrawDialogYesNoDefaultYes(char * str)
+int YesNoDefaultYesDialog (char * str)
 {
     dialog_action = 0;
 
@@ -207,7 +216,7 @@ int DrawDialogYesNoDefaultYes(char * str)
     return dialog_action;
 }
 
-int DrawDialogYesNoTimer2(char * str, float milliseconds)
+int YesNoTimer2Dialog (char * str, float milliseconds)
 {
     dialog_action = 0;
 
@@ -219,7 +228,7 @@ int DrawDialogYesNoTimer2(char * str, float milliseconds)
     return dialog_action;
 }
 
-int DrawDialogYesNo2(char * str)
+int YesNo2Dialog (char * str)
 {
     dialog_action = 0;
 
@@ -232,6 +241,9 @@ int DrawDialogYesNo2(char * str)
 
 //progress bar dialog box
 static volatile int progress_action = 0;
+
+static volatile u32 prev_prc0 = 0;
+static volatile u32 prev_prc1 = 0;
 
 static msgType mdialogprogress = MSG_DIALOG_SINGLE_PROGRESSBAR | MSG_DIALOG_MUTE_ON | MSG_DIALOG_DISABLE_CANCEL_ON | MSG_DIALOG_BKG_INVISIBLE;
 static msgType mdialogprogress2 = MSG_DIALOG_DOUBLE_PROGRESSBAR | MSG_DIALOG_MUTE_ON;
@@ -257,25 +269,6 @@ static void progress_callback(msgButton button, void *userdata)
     }
 }
 
-int DrawProgressDialogTest (char *progress_bar_title)
-{
-    progress_action = 0;
-
-    msgDialogOpen2(mdialogprogress2, progress_bar_title, progress_callback, (void *) 0xadef0045, NULL);
-
-    msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX0, " ");
-    msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX1, " ");
-    msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX0);
-    msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX1);
-
-    sysUtilCheckCallback(); tiny3d_Flip();
-    //todo job
-    msgDialogAbort();
-    return 0;
-}
-
-static u32 prev_prc0 = 0;
-static u32 prev_prc1 = 0;
 void ProgressBarUpdate(u32 cprc, const char *msg)
 {
     if (msg)
@@ -292,8 +285,7 @@ void ProgressBarUpdate(u32 cprc, const char *msg)
         msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX0);
         prev_prc0 = 0;
     }
-    sysUtilCheckCallback();
-    tiny3d_Flip();
+    do_flip ();
 }
 
 void ProgressBar2Update(u32 cprc, const char *msg)
@@ -313,20 +305,29 @@ void ProgressBar2Update(u32 cprc, const char *msg)
         prev_prc1 = 0;
     }
     //
-    sysUtilCheckCallback();
-    tiny3d_Flip();
+    do_flip ();
 }
 
 void SingleProgressBarDialog(char *caption)
 {
     progress_action = 0;
+    prev_prc0 = 0;
 
     msgDialogOpen2(mdialogprogress, caption, progress_callback, (void *) 0xadef0044, NULL);
-
     msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX0);
 
-    sysUtilCheckCallback();
-    tiny3d_Flip();
+    //2
+    do_flip ();
+
+    //3
+    //Update message and progress
+    //ProgressBarUpdate(prc, msg);
+
+    //4: 1 = OK, YES; 2 = NO/ESC/CANCEL; -1 = NONE
+    //if(ProgressBarActionGet() == 2) break;
+
+    //5
+    //msgDialogAbort();
 }
 
 void DoubleProgressBarDialog(char *caption)
@@ -336,24 +337,18 @@ void DoubleProgressBarDialog(char *caption)
     prev_prc1 = 0;
 
     msgDialogOpen2(mdialogprogress2, caption, progress_callback, (void *) 0xadef0042, NULL);
-
     msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX0, "");
     msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX1, "");
     msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX0);
     msgDialogProgressBarReset(MSG_PROGRESSBAR_INDEX1);
 
     //2
-    sysUtilCheckCallback();
-    tiny3d_Flip();
+    do_flip ();
 
     //3
     //Update message and progress
-    //msgDialogProgressBarInc(MSG_PROGRESSBAR_INDEX0, (u32) percent);
-    //msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX0, msg);
-    //msgDialogProgressBarInc(MSG_PROGRESSBAR_INDEX1, (u32) percent);
-    //msgDialogProgressBarSetMsg(MSG_PROGRESSBAR_INDEX1, msg);
-    //sysUtilCheckCallback();
-    //tiny3d_Flip();
+    //ProgressBarUpdate(prc, msg);
+    //ProgressBar2Update(prc, msg);
 
     //4: 1 = OK, YES; 2 = NO/ESC/CANCEL; -1 = NONE
     //if(ProgressBarActionGet() == 2) break;

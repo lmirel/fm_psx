@@ -1,6 +1,6 @@
 //util.h
-#ifndef __UTIL__
-#define __UTIL__
+#ifndef __UTIL_H__
+#define __UTIL_H__
 
 #include <tiny3d.h>
 
@@ -12,6 +12,9 @@
 #define STATUS_H 4
 
 #define CBSIZE  256     //char buffer size
+
+extern char *na_string;
+void do_flip ();
 
 //dialog
 int YesNoDialog (char * str);

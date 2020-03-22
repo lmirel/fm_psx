@@ -534,11 +534,17 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
     {
         //prep destination, skip FS prefix
         snprintf (dp, CBSIZE, "%s%s", job->dpath + ndp, ptr->name + spp);
+        //get the name only
+        lbp = strrchr (dp, '/');
+        if (lbp)
+            lbp++;
+        else
+            lbp = na_string;
         //
         if (ptr->dir)
-            snprintf (lp, CBSIZE, "task %d/%d create dir %s", ktr, job->files + job->dirs, dp);
+            snprintf (lp, CBSIZE, "task %d/%d create dir %s", ktr, job->files + job->dirs, lbp);
         else
-            snprintf (lp, CBSIZE, "task %d/%d copy file to %s", ktr, job->files + job->dirs, dp);
+            snprintf (lp, CBSIZE, "task %d/%d copy file to %s", ktr, job->files + job->dirs, lbp);
         fm_status_set (lp, 1, 0xffeeeeFF);
         //3
         //Update message and progress
@@ -556,7 +562,7 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
         {
             if (ptr->dir)
             {
-                snprintf (lp, CBSIZE, "create %s", dp);
+                snprintf (lp, CBSIZE, "create %s", lbp);
                 fm_status_set (lp, 2, 0xffffeeFF);
                 ProgressBar2Update (0, lp);
                 //create dir
@@ -611,6 +617,7 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
         }
         //
         ktr++;
+        do_flip ();
         //4: 1 = OK, YES; 2 = NO/ESC/CANCEL; -1 = NONE
         if (ProgressBarActionGet() == 2)
             break;
@@ -690,14 +697,19 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
     //reverse removal
     for (ptr = ptail; ptr != NULL; ptr = ptr->prev)
     {
-        if (ptr->dir)
-            snprintf (lp, CBSIZE, "task %d/%d delete dir %s", ktr, job->files + job->dirs, ptr->name);
+        lbp = strrchr (ptr->name, '/'); //file/dir name
+        if (lbp)
+            lbp++;
         else
-            snprintf (lp, CBSIZE, "task %d/%d delete file %s", ktr, job->files + job->dirs, ptr->name);
+            lbp = na_string;
+        if (ptr->dir)
+            snprintf (lp, CBSIZE, "task %d/%d delete dir %s", ktr, job->files + job->dirs, lbp);
+        else
+            snprintf (lp, CBSIZE, "task %d/%d delete file %s", ktr, job->files + job->dirs, lbp);
         fm_status_set (lp, 1, 0xffeeeeFF);
         ProgressBarUpdate ((u32)(ktr * 100/(job->files + job->dirs)), lp);
         NPrintf ("%s\n", lp);
-        ProgressBar2Update (0, NULL);  //reset
+        ProgressBar2Update (0, lbp);  //reset
         //
         switch (job->stype)
         {
@@ -744,7 +756,7 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
             }
             break;
         }        //
-        ProgressBar2Update (100, NULL);  //reset
+        ProgressBar2Update (100, NULL);  //reset and flip
         //
         ktr++;
         //4: 1 = OK, YES; 2 = NO/ESC/CANCEL; -1 = NONE
