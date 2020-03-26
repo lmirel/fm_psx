@@ -39,7 +39,7 @@ INCLUDES	:=	include ../include lib/include
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project
 #---------------------------------------------------------------------------------
-LIBS		:=	../lib/libfatfs.a -lsysfs -lfont -ltiny3d -lsimdmath -lgcm_sys -lnet -lio -lsysutil -lrt -llv2 -lsysmodule -lm
+LIBS		:=	../lib/libfatfs.a -lsysfs -lfont -lfreetype -lz -ltiny3d -lsimdmath -lgcm_sys -lnet -lio -lsysutil -lrt -llv2 -lsysmodule -lm
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -108,7 +108,8 @@ export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
 export INCLUDE	:=	$(foreach dir,$(INCLUDES), -I$(CURDIR)/$(dir)) \
 					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
 					$(LIBPSL1GHT_INC) \
-					-I$(CURDIR)/$(BUILD) -I$(PORTLIBS)/include
+					-I$(CURDIR)/$(BUILD) -I$(PORTLIBS)/include \
+					-I$(PS3DEV)/portlibs/ppu/include/freetype2
 
 #---------------------------------------------------------------------------------
 # build a list of library paths

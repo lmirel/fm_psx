@@ -733,13 +733,15 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
                 //
                 if (ptr->dir)
                 {
-                    if ((ret = sysLv2FsUnlink (ptr->name)))
-                        NPrintf ("!fm_job_delete: SYS can't remove file %s, res %d\n", ptr->name, ret);
+                    sysLv2FsChmod (ptr->name, FS_S_IFDIR | 0777);
+                    if ((ret = sysLv2FsRmdir (ptr->name)))
+                        NPrintf ("!fm_job_delete: SYS can't remove dir %s, res %d\n", ptr->name, ret);
                 }
                 else
                 {
-                    if ((ret = sysLv2FsRmdir (ptr->name)))
-                        NPrintf ("!fm_job_delete: SYS can't remove dir %s, res %d\n", ptr->name, ret);
+                    sysLv2FsChmod (ptr->name, FS_S_IFMT | 0777);
+                    if ((ret = sysLv2FsUnlink (ptr->name)))
+                        NPrintf ("!fm_job_delete: SYS can't remove file %s, res %d\n", ptr->name, ret);
                 }
                 snprintf (lp, CBSIZE, "job: SYS delete file/dir %s - %s", ptr->name, ret?"KO":"OK");
                 fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);

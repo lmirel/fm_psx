@@ -30,4 +30,10 @@ int NPad (int btn);
 int PPad (int btn);
 int APad (int btn);
 
+//osk_input requires these
+void UTF8_to_UTF16(u8 *stb, u16 *stw);
+void UTF16_to_UTF8(u16 *stw, u8 *stb);
+void Draw_scene();
+void cls();
+
 #endif

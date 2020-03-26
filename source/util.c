@@ -11,6 +11,7 @@
 #include "util.h"
 #include "rsxutil.h"
 #include "pad.h"
+#include "ttf_render.h"
 
 #define S_PI 3.14159265f
 #define D_PI 6.28318531f
@@ -495,4 +496,114 @@ static void double_bar(char *caption)
                 msgDialogProgressBarInc(MSG_PROGRESSBAR_INDEX1, (u32) bar2_countparts);
 
 #endif
+
+//4th
+extern int app_render (int dat);
+
+void Draw_scene()
+{
+    //app_render (0);
+}
+
+void cls()
+{
+    tiny3d_Clear(0xff000000, TINY3D_CLEAR_ALL);
+
+    // Enable alpha Test
+    tiny3d_AlphaTest(1, 1, TINY3D_ALPHA_FUNC_GEQUAL);
+
+    // Enable alpha blending.
+    tiny3d_BlendFunc(1, TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA | TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA,
+            TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA | TINY3D_BLEND_FUNC_DST_ALPHA_ZERO,
+            TINY3D_BLEND_RGB_FUNC_ADD | TINY3D_BLEND_ALPHA_FUNC_ADD);
+    reset_ttf_frame();
+}
+
+void UTF16_to_UTF8(u16 *stw, u8 *stb)
+{
+    while(stw[0])
+    {
+        if((stw[0] & 0xFF80) == 0)
+        {
+            *(stb++) = stw[0] & 0xFF;   // utf16 00000000 0xxxxxxx utf8 0xxxxxxx
+        }
+        else if((stw[0] & 0xF800) == 0)
+        {
+            // utf16 00000yyy yyxxxxxx utf8 110yyyyy 10xxxxxx
+            *(stb++) = ((stw[0]>>6) & 0xFF) | 0xC0; *(stb++) = (stw[0] & 0x3F) | 0x80;
+        }
+        else if((stw[0] & 0xFC00) == 0xD800 && (stw[1] & 0xFC00) == 0xDC00)
+        {
+            // utf16 110110ww wwzzzzyy 110111yy yyxxxxxx (wwww = uuuuu - 1)
+            // utf8  1111000uu 10uuzzzz 10yyyyyy 10xxxxxx
+            *(stb++)= (((stw[0] + 64)>>8) & 0x3) | 0xF0; *(stb++)= (((stw[0]>>2) + 16) & 0x3F) | 0x80;
+            *(stb++)= ((stw[0]>>4) & 0x30) | 0x80 | ((stw[1]<<2) & 0xF); *(stb++)= (stw[1] & 0x3F) | 0x80;
+            stw++;
+        }
+        else
+        {
+            // utf16 zzzzyyyy yyxxxxxx utf8 1110zzzz 10yyyyyy 10xxxxxx
+            *(stb++)= ((stw[0]>>12) & 0xF) | 0xE0; *(stb++)= ((stw[0]>>6) & 0x3F) | 0x80; *(stb++)= (stw[0] & 0x3F) | 0x80;
+        }
+
+        stw++;
+    }
+
+    *stb = 0;
+}
+
+void UTF8_to_UTF16(u8 *stb, u16 *stw)
+{
+   int n, m;
+   u32 UTF32;
+   while(*stb)
+   {
+       if(*stb & 128)
+       {
+            m = 1;
+
+            if((*stb & 0xf8) == 0xf0)
+            {
+                // 4 bytes
+                UTF32 = (u32) (*(stb++) & 3);
+                m = 3;
+            }
+            else if((*stb & 0xE0) == 0xE0)
+            {
+                // 3 bytes
+                UTF32 = (u32) (*(stb++) & 0xf);
+                m = 2;
+            }
+            else if((*stb & 0xE0) == 0xC0)
+            {
+                // 2 bytes
+                UTF32 = (u32) (*(stb++) & 0x1f);
+                m = 1;
+            }
+            else {stb++; continue;} // Error!
+
+            for(n = 0; n < m; n++)
+            {
+                if(!*stb) break; // Error!
+
+                if((*stb & 0xc0) != 0x80) break; // Error!
+                UTF32 = (UTF32 <<6) |((u32) (*(stb++) & 63));
+            }
+
+            if((n != m) && !*stb) break;
+
+        } else UTF32 = (u32) *(stb++);
+
+        if(UTF32<65536)
+            *stw++= (u16) UTF32;
+        else
+        {
+            //110110ww wwzzzzyy 110111yy yyxxxxxx
+            *stw++= (((u16) (UTF32>>10)) & 0x3ff) | 0xD800;
+            *stw++= (((u16) (UTF32)) & 0x3ff) | 0xDC00;
+        }
+   }
+
+   *stw++ = 0;
+}
 

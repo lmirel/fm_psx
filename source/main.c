@@ -13,6 +13,9 @@
 #define _FPS
 
 #include <io/pad.h>
+#include <osk_input.h>
+#define SUCCESS 	1
+#define FAILED	 	0
 
 #include <tiny3d.h>
 #include <libfont.h>
@@ -741,6 +744,32 @@ int app_update(int dat)
     {
         fm_panel_exit (app_active_panel ());
     }
+    //rename
+    else if (NPad (BUTTON_START))
+    {
+        char rnbuf[CBSIZE];
+        //fm_panel_exit (app_active_panel ());
+        if(Get_OSK_String("Rename", rnbuf, CBSIZE) == SUCCESS)
+        {
+            //rename
+            char lp[CBSIZE];
+            snprintf (lp, CBSIZE, "rename to %s", rnbuf);
+            fm_status_set (lp, 1, 0xffeeeeFF);
+        }
+    }
+    //new dir
+    else if (NPad (BUTTON_SELECT))
+    {
+        char nbuf[256];
+        //fm_panel_exit (app_active_panel ());
+        if(Get_OSK_String("New folder", nbuf, 255) == SUCCESS)
+        {
+            //new dir
+            char lp[CBSIZE];
+            snprintf (lp, CBSIZE, "new dir %s", nbuf);
+            fm_status_set (lp, 1, 0xffeeeeFF);
+        }
+    }
     //cross - action: enter dir
     else if (NPad (BUTTON_CROSS))
     {
@@ -777,6 +806,7 @@ int app_update(int dat)
 //4th
 int app_render(int dat)
 {
+    #if 1
     /* DRAWING STARTS HERE */
     tiny3d_Clear(0xff000000, TINY3D_CLEAR_ALL);
         
@@ -787,6 +817,7 @@ int app_render(int dat)
     tiny3d_BlendFunc(1, TINY3D_BLEND_FUNC_SRC_RGB_SRC_ALPHA | TINY3D_BLEND_FUNC_SRC_ALPHA_SRC_ALPHA,
         TINY3D_BLEND_FUNC_DST_RGB_ONE_MINUS_SRC_ALPHA | TINY3D_BLEND_FUNC_DST_ALPHA_ZERO,
         TINY3D_BLEND_RGB_FUNC_ADD | TINY3D_BLEND_ALPHA_FUNC_ADD);
+    #endif
     // change to 2D context ( virtual size of the screen is 848.0 x 512.0)
     fm_panel_draw (&lp);
     fm_panel_draw (&rp);
@@ -826,6 +857,7 @@ s32 main(s32 argc, const char* argv[])
         if (app_update (0) == -1)
             break;
 		//4
+        //cls ();
         app_render (0);
 	}
     //5
