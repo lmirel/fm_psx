@@ -60,6 +60,7 @@ int fm_status_draw (int dat)
 //enter current dir
 int fm_panel_enter (struct fm_panel *p)
 {
+    int ret;
     //can't enter file
     if (!p->current->dir)
         return -1;
@@ -69,19 +70,67 @@ int fm_panel_enter (struct fm_panel *p)
         snprintf (np, CBSIZE, "%s/%s", p->path, p->current->name);
     else
         snprintf (np, CBSIZE, "%s", p->current->name);
-    return fm_panel_scan (p, np);
-    //
-    return 0;
+    ret = fm_panel_scan (p, np);
+    if (0 == ret)
+    {
+        //add to navigation history
+        fm_entry_add (&p->history, np, 1, 0);
+        NPrintf ("navi add: %s\n", np);
+    }
+    return ret;
 }
 
 //exit current dir
 int fm_panel_exit (struct fm_panel *p)
 {
+    int ret;
+    char np[CBSIZE];
+    char lp[CBSIZE];
+    struct fm_file *list = p->history;
+    struct fm_file *current = list;
+    *np = 0; *lp = 0;
+    if (current)
+    {
+        // move to the end of the list
+        while (current->next != NULL)
+            current = current->next;
+        //
+        NPrintf("navi from [%s] to [%s]\n", current->name, current->prev?current->prev->name:"none");
+        //remove last entry
+        if (current->name)
+        {
+            snprintf (lp, CBSIZE, "%s", current->name);
+            free (current->name);
+        }
+        if (current->prev)
+        {
+            snprintf (np, CBSIZE, "%s", current->prev->name);
+            current->prev->next = NULL;
+        }
+        //was this the last one?
+        if (current == list)
+            p->history = NULL;
+        free (current);
+    }
     //can't return from here on root with no FS
     if (!p->path)
         return -1;
     //
-    char np[CBSIZE];
+#if 1
+    if (*np)
+    {
+        ret = fm_panel_scan (p, np);
+        //select previous item
+        if (*lp)
+        {
+            char *plp = strrchr (lp, '/');
+            if (plp && *(plp + 1))
+                fm_panel_locate (p, plp + 1);
+        }
+    }
+    else
+        ret = fm_panel_scan (p, NULL);
+#else
     char *lp = strrchr (p->path, '/');
     if (lp)
     {
@@ -96,7 +145,12 @@ int fm_panel_exit (struct fm_panel *p)
         return fm_panel_scan (p, NULL);
     //
     snprintf (np, CBSIZE, "%s", p->path);
-    return fm_panel_scan (p, np);
+    ret = fm_panel_scan (p, np);
+    //
+    NPrintf ("panel exit to %s\n", np);
+#endif
+    //
+    return ret;
 }
 
 int fm_panel_clear (struct fm_panel *p)
@@ -787,9 +841,10 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
     return 0;
 }
 
-int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz)
+int fm_entry_add (struct fm_file **entries, char *fn, char dir, unsigned long fsz)
 {
     // Allocate memory for new node;
+    struct fm_file *list = *entries;
     struct fm_file *link = (struct fm_file*) malloc (sizeof (struct fm_file));
     if (!link)
     {
@@ -803,22 +858,14 @@ int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz)
     //
     link->prev = NULL;
     link->next = NULL;
-    NPrintf ("fm_job_add %d>%s\n", dir, fn);
-    //stats
-    if (fsz > 0)
-        p->fsize += fsz;
-    if (dir)
-        p->dirs++;
-    else
-        p->files++;
     // If head is empty, create new list
-    if (p->entries == NULL)
+    if (list == NULL)
     {
-        p->entries = link;
+        *entries = link;
     }
     else
     {
-        struct fm_file *current = p->entries;
+        struct fm_file *current = list;
         // move to the end of the list
         while (current->next != NULL)
             current = current->next;
@@ -826,12 +873,52 @@ int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz)
         current->next = link;
         link->prev = current;
     }
-    //
     return 0;
+}
+
+int fm_entry_pull (struct fm_file **entries)
+{
+    struct fm_file *list = *entries;
+    struct fm_file *current = list;
+    if (current)
+    {
+        // move to the end of the list
+        while (current->next != NULL)
+            current = current->next;
+        //remove last entry
+        if (current->name)
+            free (current->name);
+        current->prev->next = NULL;
+        //was this the last one?
+        if (current == list)
+            *entries = NULL;
+        free (current);
+    }
+    return 0;
+}
+
+int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz)
+{
+    if (0 == fm_entry_add (&p->entries, fn, dir, fsz))
+    {
+        //
+        NPrintf ("fm_job_add %d>%s\n", dir, fn);
+        //stats
+        if (fsz > 0)
+            p->fsize += fsz;
+        if (dir)
+            p->dirs++;
+        else
+            p->files++;
+        //
+        return 0;
+    }
+    return -1;
 }
 
 int fm_panel_scan (struct fm_panel *p, char *path)
 {
+    int res;
     if (p->path)
         free (p->path);
     if (path)
@@ -840,9 +927,13 @@ int fm_panel_scan (struct fm_panel *p, char *path)
         p->path = NULL;
     //cleanup
     fm_panel_clear (p);
-        
     //
-    return fs_path_scan (p);
+    res = fs_path_scan (p);
+    if (0 ==res)
+    {
+        //add to navigation history
+    }
+    return res;
 }
 
 int fm_panel_init (struct fm_panel *p, int x, int y, int w, int h, char act)
@@ -854,6 +945,7 @@ int fm_panel_init (struct fm_panel *p, int x, int y, int w, int h, char act)
     //
     p->active = act;
     p->entries = NULL;
+    p->history = NULL;
     p->current = NULL;
     p->current_idx = -1;
     p->path = NULL;
@@ -981,6 +1073,24 @@ int fm_fname_get (struct fm_file *link, int cw, char *out)
         snprintf (out, cw, "/%s", link->name);
     else
         snprintf (out, cw, "%s", link->name);
+    return 0;
+}
+
+int fm_panel_locate (struct fm_panel *p, char *path)
+{
+    struct fm_file *ptr;
+    int cidx = -1;
+    for (ptr = p->entries; ptr != NULL; ptr = ptr->next)
+    {
+        cidx++;
+        NPrintf ("locate %s vs %s\n", path, ptr->name);
+        if (0 == strcmp (ptr->name, path))
+        {
+            p->current = ptr;
+            p->current_idx = cidx;
+            break;
+        }
+    }
     return 0;
 }
 

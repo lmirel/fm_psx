@@ -747,27 +747,37 @@ int app_update(int dat)
     //rename
     else if (NPad (BUTTON_START))
     {
-        char rnbuf[CBSIZE];
-        //fm_panel_exit (app_active_panel ());
-        if(Get_OSK_String("Rename", rnbuf, CBSIZE) == SUCCESS)
+        char sp[CBSIZE];
+        struct fm_panel *ps = app_active_panel ();
+        if (ps->path && ps->current)
         {
-            //rename
-            char lp[CBSIZE];
-            snprintf (lp, CBSIZE, "rename to %s", rnbuf);
-            fm_status_set (lp, 1, 0xffeeeeFF);
+            //todo: check if we're allowed to rename item
+            //fm_panel_exit (app_active_panel ());
+            if(Get_OSK_String("Rename", sp, CBSIZE) == SUCCESS)
+            {
+                //rename
+                char lp[CBSIZE];
+                snprintf (lp, CBSIZE, "rename %s to %s", sp, ps->current);
+                fm_status_set (lp, 1, 0xffeeeeFF);
+            }
         }
     }
     //new dir
     else if (NPad (BUTTON_SELECT))
     {
-        char nbuf[256];
-        //fm_panel_exit (app_active_panel ());
-        if(Get_OSK_String("New folder", nbuf, 255) == SUCCESS)
+        char sp[CBSIZE];
+        struct fm_panel *ps = app_active_panel ();
+        if (ps->path)
         {
-            //new dir
-            char lp[CBSIZE];
-            snprintf (lp, CBSIZE, "new dir %s", nbuf);
-            fm_status_set (lp, 1, 0xffeeeeFF);
+            //todo: check if we're allowed to create dir?!
+            //fm_panel_exit (app_active_panel ());
+            if(Get_OSK_String("New folder", sp, 255) == SUCCESS)
+            {
+                //new dir
+                char lp[CBSIZE];
+                snprintf (lp, CBSIZE, "new dir %s", sp);
+                fm_status_set (lp, 1, 0xffeeeeFF);
+            }
         }
     }
     //cross - action: enter dir

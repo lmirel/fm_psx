@@ -28,6 +28,7 @@ struct fm_file {
 struct fm_panel {
     char *path;                 //current path - full path, including drive identifier
     struct fm_file *entries;    //entries
+    struct fm_file *history;    //browsing history: dirs which were traversed
     struct fm_file *current;    //current entry/selection
     unsigned int current_idx;   //index of currently selected item, for scrolling
     //
@@ -53,6 +54,9 @@ struct fm_job {
     unsigned long long fsize;
 };
 
+int fm_entry_add (struct fm_file **entries, char *fn, char dir, unsigned long fsz);
+int fm_entry_pull (struct fm_file **entries);
+
 //list file management job
 int fm_job_list (char *path);
 int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz);
@@ -75,8 +79,10 @@ int fm_panel_scan (struct fm_panel *p, char *path);
 
 int fm_panel_init (struct fm_panel *p, int x, int y, int w, int h, char act);
 int fm_panel_draw (struct fm_panel *p);
-
+//scroll current item up/dn
 int fm_panel_scroll (struct fm_panel *p, int dn);
+//locate item and set as current
+int fm_panel_locate (struct fm_panel *p, char *path);
 
 //add file/dir entry to panel
 int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz);
