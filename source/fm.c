@@ -235,6 +235,7 @@ int fm_job_list (char *path)
 int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long ssz, int (*ui_render)(int dt))
 {
     FATFS fs;      /* Work area (filesystem object) for logical drives */
+    int fsx = 0;
     BYTE *buffer = NULL;    // File copy buffer
     FIL f1src, f1dst;       // File objects
     int ret = 0;
@@ -264,7 +265,10 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
                 ret = -1;
             }
             else
+            {
                 src_ok = 1;
+                fsx++;
+            }
         }
         break;
         case FS_TSYS:
@@ -300,14 +304,18 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
     {
         case FS_TFAT:
         {
-            f_mount(&fs, dst, 0);
+            if (fsx == 0)
+                f_mount(&fs, dst, 0);
             if (f_open (&f1dst, dst, FA_WRITE | FA_CREATE_ALWAYS))
             {
                 NPrintf ("!fm_file_copy: FAT dst create %s\n", dst);
                 ret = -1;
             }
             else
+            {
                 dst_ok = 1;
+                fsx++;
+            }
         }
         break;
         case FS_TSYS:
@@ -465,7 +473,6 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
         {
             if (src_ok)
                 f_close (&f1src);
-            f_mount (0, src, 0);
         }
         break;
         case FS_TSYS:
@@ -494,7 +501,6 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
             //remove file on error
             if (ret)
                 f_unlink (dst);
-            f_mount (0, dst, 0);
         }
         break;
         case FS_TSYS:
@@ -516,6 +522,14 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
             
         }
         break;
+    }
+    //did we use FATfs?
+    if (fsx)
+    {
+        if (srct == FS_TFAT)
+            f_mount (0, src, 0);
+        else
+            f_mount (0, dst, 0);
     }
     //
     return ret;
@@ -696,6 +710,123 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
     fm_job_clear (job);
     //
     return 0;
+}
+
+int fm_job_rename (char *path, char *old, char *new)
+{
+    int nsp = 0, ret = 0;
+    char lp[CBSIZE];
+    char op[CBSIZE];
+    char np[CBSIZE];
+    switch (fs_get_fstype (path, &nsp))
+    {
+        case FS_TFAT:
+        {
+            char *npath = path + nsp;
+            FATFS fs;      /* Work area (filesystem object) for logical drives */
+            f_mount (&fs, npath, 0);
+            snprintf (lp, CBSIZE, "job: FAT rename %s to %s in %s", old, new, npath);
+            fm_status_set (lp, 2, 0xffffeeFF);
+            //build paths
+            snprintf (op, CBSIZE, "%s/%s", npath, old);
+            snprintf (np, CBSIZE, "%s/%s", npath, new);
+            //rename
+            if ((ret = f_rename (op, np)))
+                NPrintf ("!fm_job_rename: FAT can't rename %s to %s in %s res %d\n", op, np, npath, ret);
+            snprintf (lp, CBSIZE, "job: FAT rename %s to %s in %s: %s", old, new, npath, ret?"KO":"OK");
+            fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+            //unmount
+            f_mount (0, npath, 0);
+        }
+        break;
+        case FS_TSYS:
+        {
+            char *npath = path + nsp;
+            //
+            snprintf (lp, CBSIZE, "job: SYS rename %s to %s in %s", old, new, npath);
+            fm_status_set (lp, 2, 0xffffeeFF);
+            //build paths
+            snprintf (op, CBSIZE, "%s/%s", npath, old);
+            snprintf (np, CBSIZE, "%s/%s", npath, new);
+            //
+            //sysLv2FsChmod (op, FS_S_IFDIR | 0777);
+            //sysLv2FsChmod (op, FS_S_IFMT | 0777);
+            if ((ret = sysLv2FsRename (op, np)))
+                NPrintf ("!fm_job_delete: SYS can't rename %s to %s in %s res %d\n", old, new, npath, ret);
+            //
+            snprintf (lp, CBSIZE, "job: SYS rename %s to %s in %s: %s", old, new, npath, ret?"KO":"OK");
+            fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+        }
+        break;
+        case FS_TEXT:
+        {
+            
+        }
+        break;
+        case FS_TNTFS:
+        {
+            
+        }
+        break;
+    }        //
+    return ret;
+}
+
+int fm_job_newdir (char *path, char *new)
+{
+    int nsp = 0, ret = 0;
+    char lp[CBSIZE];
+    char np[CBSIZE];
+    switch (fs_get_fstype (path, &nsp))
+    {
+        case FS_TFAT:
+        {
+            char *npath = path + nsp;
+            FATFS fs;      /* Work area (filesystem object) for logical drives */
+            f_mount (&fs, npath, 0);
+            snprintf (lp, CBSIZE, "job: FAT mkdir %s in %s", new, npath);
+            fm_status_set (lp, 2, 0xffffeeFF);
+            //build paths
+            snprintf (np, CBSIZE, "%s/%s", npath, new);
+            //rename
+            if ((ret = f_mkdir (np)))
+                NPrintf ("!fm_job_rename: FAT can't mkdir %s in %s res %d\n", np, npath, ret);
+            snprintf (lp, CBSIZE, "job: FAT mkdir %s in %s: %s", new, npath, ret?"KO":"OK");
+            fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+            //unmount
+            f_mount (0, npath, 0);
+        }
+        break;
+        case FS_TSYS:
+        {
+            char *npath = path + nsp;
+            //
+            snprintf (lp, CBSIZE, "job: SYS mkdir %s in %s", new, npath);
+            fm_status_set (lp, 2, 0xffffeeFF);
+            //build paths
+            snprintf (np, CBSIZE, "%s/%s", npath, new);
+            //
+            //sysLv2FsChmod (op, FS_S_IFDIR | 0777);
+            //sysLv2FsChmod (op, FS_S_IFMT | 0777);
+            if ((ret = sysLv2FsMkdir (np, 0777)))
+                NPrintf ("!fm_job_delete: SYS can't mkdir %s in %s res %d\n", new, npath, ret);
+            //
+            snprintf (lp, CBSIZE, "job: SYS mkdir %s in %s: %s", new, npath, ret?"KO":"OK");
+            fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+        }
+        break;
+        case FS_TEXT:
+        {
+            
+        }
+        break;
+        case FS_TNTFS:
+        {
+            
+        }
+        break;
+    }        //
+    return ret;
 }
 
 int fm_job_delete (char *src, int (*ui_render)(int dt))

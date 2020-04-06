@@ -66,6 +66,9 @@ int fm_job_clear (struct fm_job *job);
 int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt));
 //remove files/dirs from source
 int fm_job_delete (char *src, int (*ui_render)(int dt));
+int fm_job_rename (char *path, char *old, char *new);
+//
+int fm_job_newdir (char *path, char *new);
 //draw (4) status messages
 int fm_status_draw (int dat);
 //set status message for index

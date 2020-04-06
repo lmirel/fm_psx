@@ -41,6 +41,8 @@ extern unsigned char msx[];
 #ifdef SDTEST
 #include "types.h"
 
+#include "ver.h"
+
 typedef struct {
     int device;
     void *dirStruct;
@@ -752,13 +754,14 @@ int app_update(int dat)
         if (ps->path && ps->current)
         {
             //todo: check if we're allowed to rename item
-            //fm_panel_exit (app_active_panel ());
             if(Get_OSK_String("Rename", sp, CBSIZE) == SUCCESS)
             {
                 //rename
                 char lp[CBSIZE];
                 snprintf (lp, CBSIZE, "rename %s to %s", sp, ps->current);
                 fm_status_set (lp, 1, 0xffeeeeFF);
+                //
+                fm_job_rename (ps->path, ps->current->name, sp);
             }
         }
     }
@@ -777,6 +780,7 @@ int app_update(int dat)
                 char lp[CBSIZE];
                 snprintf (lp, CBSIZE, "new dir %s", sp);
                 fm_status_set (lp, 1, 0xffeeeeFF);
+                fm_job_newdir (ps->path, sp);
             }
         }
     }
@@ -840,6 +844,13 @@ int app_render(int dat)
     SetFontColor (0xff0000ff, 0x00000000);
     SetFontAutoCenter (0);
     DrawString (800, 0, sfps);
+#endif
+#ifdef SWVER
+    char swver[8];
+    snprintf (swver, 7, "%s", SWVER);
+    SetFontColor (0xff0000ff, 0x00000000);
+    SetFontAutoCenter (0);
+    DrawString (800, 504, swver);
 #endif
     //
     tiny3d_Flip ();
