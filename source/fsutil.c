@@ -381,7 +381,7 @@ int sys_scan_path (struct fm_panel *p)
 int fat_scan_path (struct fm_panel *p)
 {
     char lp[256];
-    FRESULT res;
+    FRESULT res = 0;
     FDIR dir;
     FILINFO fno;
     FATFS fs;     /* Ponter to the filesystem object */

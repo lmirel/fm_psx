@@ -76,6 +76,7 @@ int fm_status_set (char *sm, int idx, int col);
 
 int fm_panel_enter (struct fm_panel *p);
 int fm_panel_exit (struct fm_panel *p);
+int fm_panel_reload (struct fm_panel *p);
 
 int fm_panel_clear (struct fm_panel *p);
 int fm_panel_scan (struct fm_panel *p, char *path);

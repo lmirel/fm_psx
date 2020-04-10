@@ -10,9 +10,13 @@ endif
 #---------------------------------------------------------------------------------
 #  TITLE, APPID, CONTENTID, ICON0 SFOXML before ppu_rules.
 #---------------------------------------------------------------------------------
-TITLE		:=	File Manager Test
-APPID		:=	PS3FM0001
-CONTENTID	:=	UP0001-$(APPID)_00-0000000000000000
+TITLE		        := Simple File Manager
+APPID		        := PS3SFM001
+CONTENTID	      := UP0001-$(APPID)_00-0000000000000000
+ICON0           := $(CURDIR)/ICON0.PNG
+#ICON1          := $(CURDIR)/ICON1.PAM
+#PIC1           := $(CURDIR)/PIC1.PNG
+SFOXML          := $(CURDIR)/sfo.xml
 
 SCETOOL_FLAGS	?=	--self-app-version=0001000000000000  --sce-type=SELF --compress-data=TRUE --self-add-shdrs=TRUE --skip-sections=FALSE --key-revision=1 \
 					--self-auth-id=1010000001000003 --self-vendor-id=01000002 --self-fw-version=0003004000000000

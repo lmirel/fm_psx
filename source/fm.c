@@ -89,6 +89,7 @@ int fm_panel_exit (struct fm_panel *p)
     struct fm_file *list = p->history;
     struct fm_file *current = list;
     *np = 0; *lp = 0;
+    //
     if (current)
     {
         // move to the end of the list
@@ -1047,9 +1048,16 @@ int fm_job_add (struct fm_job *p, char *fn, char dir, unsigned long fsz)
     return -1;
 }
 
+int fm_panel_reload (struct fm_panel *p)
+{
+    //cleanup
+    fm_panel_clear (p);
+    //
+    return fs_path_scan (p);
+}
+
 int fm_panel_scan (struct fm_panel *p, char *path)
 {
-    int res;
     if (p->path)
         free (p->path);
     if (path)
@@ -1059,12 +1067,7 @@ int fm_panel_scan (struct fm_panel *p, char *path)
     //cleanup
     fm_panel_clear (p);
     //
-    res = fs_path_scan (p);
-    if (0 ==res)
-    {
-        //add to navigation history
-    }
-    return res;
+    return fs_path_scan (p);
 }
 
 int fm_panel_init (struct fm_panel *p, int x, int y, int w, int h, char act)

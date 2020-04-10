@@ -13,4 +13,6 @@ int fs_job_scan (struct fm_job *p);
 
 int fs_get_fstype (char *path, int *npo);
 
+int fatfs_init();
+
 #endif

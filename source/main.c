@@ -84,6 +84,7 @@ static u64 ff_ps3id[8] = {
 	0x010300000000000EULL, 0x010300000000000FULL, 0x010300000000001FULL, 0x0103000000000020ULL 
 	};
 #if 0
+#if 0
 static int dev_fd[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
 #include "storage.h"
 int sdopen (int fd)
@@ -182,6 +183,30 @@ FRESULT scan_files (
     }
     return res;
 }
+
+int sdopen2 (int i)
+{
+    FDIR fdir;
+    char lbuf[10];
+    FATFS fs;     /* Ponter to the filesystem object */
+    snprintf(lbuf, 10, "%d:/", i);
+    int ret = f_mount(&fs, lbuf, 0);                    /* Mount the default drive */
+    if (ret != FR_OK)
+    {
+        return ret;
+    }
+    ret = f_opendir (&fdir, lbuf);
+    DPrintf("%d f_opendir %s drive %d ssize %d csize %d\n", ret, lbuf, i, fs.ssize, fs.csize);
+    if (ret == FR_OK)
+        f_closedir (&fdir);
+    f_mount(0, lbuf, 0);                    /* Mount the default drive */
+    //
+    return ret;
+}
+#endif
+//
+#endif
+
 #if 0
 fdisk -l /dev/sdb1
 Disk /dev/sdb1: 223.6 GiB, 240055746560 bytes, 468858880 sectors
@@ -268,28 +293,6 @@ int sdopen (int i)
     return ret;
 }
 
-int sdopen2 (int i)
-{
-    FDIR fdir;
-    char lbuf[10];
-    FATFS fs;     /* Ponter to the filesystem object */
-    snprintf(lbuf, 10, "%d:/", i);
-    int ret = f_mount(&fs, lbuf, 0);                    /* Mount the default drive */
-    if (ret != FR_OK)
-    {
-        return ret;
-    }
-    ret = f_opendir (&fdir, lbuf);
-    DPrintf("%d f_opendir %s drive %d ssize %d csize %d\n", ret, lbuf, i, fs.ssize, fs.csize);
-    if (ret == FR_OK)
-        f_closedir (&fdir);
-    f_mount(0, lbuf, 0);                    /* Mount the default drive */
-    //
-    return ret;
-}
-#endif
-//
-
 int fatfs_init()
 {
     fflib_init();
@@ -307,7 +310,6 @@ int fatfs_init()
     //
     return 0;
 }
-#endif
 
 void LoadTexture()
 {
@@ -326,6 +328,7 @@ void LoadTexture()
 
     // here you can add more textures using 'texture_pointer'. It is returned aligned to 16 bytes
 }
+#if 0
 //file write perf
 int file_write_perf (int idx)
 {
@@ -638,6 +641,8 @@ int file_run(char *fname)
     }
     return 0;
 }
+#endif
+#endif
 //app
 struct fm_panel *app_active_panel ()
 {
@@ -758,10 +763,13 @@ int app_update(int dat)
             {
                 //rename
                 char lp[CBSIZE];
-                snprintf (lp, CBSIZE, "rename %s to %s", sp, ps->current);
+                snprintf (lp, CBSIZE, "rename %s to %s", sp, ps->current->name);
                 fm_status_set (lp, 1, 0xffeeeeFF);
                 //
                 fm_job_rename (ps->path, ps->current->name, sp);
+                //reload for content refresh
+                fm_panel_reload (ps);
+                fm_panel_locate (ps, sp);
             }
         }
     }
@@ -781,6 +789,9 @@ int app_update(int dat)
                 snprintf (lp, CBSIZE, "new dir %s", sp);
                 fm_status_set (lp, 1, 0xffeeeeFF);
                 fm_job_newdir (ps->path, sp);
+                //reload for content refresh
+                fm_panel_reload (ps);
+                fm_panel_locate (ps, sp);
             }
         }
     }
@@ -798,6 +809,8 @@ int app_update(int dat)
         {
             snprintf (sp, CBSIZE, "%s/%s", ps->path, ps->current->name);
             fm_job_delete (sp, &app_render);
+            //reload for content refresh
+            fm_panel_reload (ps);
         }
     }
     //files copy
@@ -812,6 +825,8 @@ int app_update(int dat)
             snprintf (sp, CBSIZE, "%s/%s", ps->path, ps->current->name);
             snprintf (dp, CBSIZE, "%s/", pd->path);
             fm_job_copy (sp, dp, &app_render);
+            //reload inactive panel for content refresh
+            fm_panel_reload (app_inactive_panel ());
         }
     }
     //

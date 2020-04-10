@@ -5,14 +5,16 @@
 #include <unistd.h>
 #include <math.h>
 
-#include <tiny3d.h>
-#include "libfont2.h"
-#include "pad.h"
-
 #include <sysutil/osk.h>
 #include <sysutil/sysutil.h>
 #include <sys/memory.h>
 #include <ppu-lv2.h>
+
+#include <tiny3d.h>
+#include "libfont2.h"
+#include "pad.h"
+
+#include "util.h"
 
 #define OSKDIALOG_FINISHED          0x503
 #define OSKDIALOG_UNLOADED          0x504
