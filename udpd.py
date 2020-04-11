@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import socket
 UDP_IP = "0.0.0.0"
 UDP_PORT = 18194

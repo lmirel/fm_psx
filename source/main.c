@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <math.h>
 
-#define _FPS
+//#define _FPS
 
 #include <io/pad.h>
 #include <osk_input.h>
@@ -35,6 +35,7 @@ extern unsigned char msx[];
 #include "fflib.h"
 #include "fm.h"
 #include "util.h"
+#include "fsutil.h"
 #include "pad.h"
 
 #define SDTEST
@@ -641,6 +642,8 @@ int file_run(char *fname)
     }
     return 0;
 }
+char sp[] = "fat1:/";
+char sp2[] = "sys:/";
 #endif
 #endif
 //app
@@ -676,8 +679,6 @@ int _app_restore (char init)
     return 0;
 }//1st
 
-char sp[] = "fat1:/";
-char sp2[] = "sys:/";
 int app_init (int dt)
 {
     fm_panel_init (&lp, 0, 0, PANEL_W*8, PANEL_H*8, 1);
@@ -685,7 +686,8 @@ int app_init (int dt)
     //debug console
     initConsole ();
     //fatfs test
-    fatfs_init ();
+    //fatfs_init ();
+    fflib_init();
     //
     tiny3d_Init (1024*1024);
     //
@@ -708,10 +710,28 @@ int app_init (int dt)
 }
 //2nd input - skip, we read in app_update
 //3rd
+// --automount logic, every X update: X = 60fps * 4sec = 240 frames
+#define AUTOMOUNT_FREQ  (3 * 60)
+static int amount_k = 0;
 int app_update(int dat)
 {
     //2 input
     ps3pad_read ();
+    //mount monitoring logic: every 4 sec
+    if (!app_active_panel ()->path)
+    {
+        if (amount_k <= 0)
+        {
+            //probe rootfs devices
+            if (rootfs_probe ())
+            {
+                fm_panel_scan (&lp, NULL);
+                fm_panel_scan (&rp, NULL);
+            }
+            amount_k = AUTOMOUNT_FREQ;
+        }
+        amount_k --;
+    }
     //go up
     if (NPad (BUTTON_CIRCLE))
     {

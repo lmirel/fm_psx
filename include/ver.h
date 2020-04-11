@@ -1,1 +1,1 @@
-#define SWVER "v0.2.0"
+#define SWVER "v0.3.0"

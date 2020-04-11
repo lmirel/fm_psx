@@ -49,7 +49,7 @@ LIBS		:=	../lib/libfatfs.a -lsysfs -lfont -lfreetype -lz -ltiny3d -lsimdmath -lg
 # options for code generation
 #---------------------------------------------------------------------------------
 
-CFLAGS		=	-O2 -Wall -mcpu=cell $(MACHDEP) $(INCLUDE) -DPS3_GEKKO -DDEBUG_IP=\"192.168.2.191\"
+CFLAGS		=	-O2 -Wall -mcpu=cell $(MACHDEP) $(INCLUDE) -DPS3_GEKKO $(DFLAGS)
 CXXFLAGS	=	$(CFLAGS)
 
 LDFLAGS		=	$(MACHDEP) -Wl,-Map,$(notdir $@).map

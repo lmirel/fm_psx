@@ -12,19 +12,17 @@
 #include <libfont.h>
 
 //network debug via UDP
-#ifndef DEBUG_IP
-#define DEBUG_IP "192.168.2.185"
-#endif
-
 #ifdef DEBUG_IP
 #include <net/net.h>
 #include <netinet/in.h>
 
 static int SocketFD;
 #define DEBUG_PORT 18194
-
+#endif
 void debugInit ()
 {
+#ifdef DEBUG_IP
+#warning using network debug
   struct sockaddr_in stSockAddr;
   netInitialize ();
   SocketFD = netSocket (AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -39,8 +37,9 @@ void debugInit ()
 	
   NPrintf ("network debug module initialized\n") ;
   NPrintf ("ready to have a lot of fun\n") ;
-}
 #endif
+}
+
 void NPrintf (const char* fmt, ...)
 {
 #ifdef DEBUG_IP
@@ -51,8 +50,6 @@ void NPrintf (const char* fmt, ...)
   va_end (arg);
   //
   netSend (SocketFD, buffer, strlen (buffer), 0);
-#else
-  return;
 #endif
 }
 

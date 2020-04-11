@@ -1287,13 +1287,20 @@ int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz)
     #if 1
         if (dir)
         {
-            while (current->next != NULL && current->dir == 1 && strcmp (current->name, fn) < 0)
+            while (current->next && current->dir && strcmp (current->name, fn) < 0)
                 current = current->next;
             //don't add after file
             if (current->next == NULL && current->dir)
             {
-                current->next = link;
-                link->prev = current;
+                if (strcmp (current->name, fn) < 0)
+                {
+                    current->next = link;
+                    link->prev = current;
+                }
+                else
+                {
+                    add_before (p, link, current);
+                }
             }
             else
             {
@@ -1304,11 +1311,11 @@ int fm_panel_add (struct fm_panel *p, char *fn, char dir, unsigned long fsz)
         else
         {
             //skip dirs
-            while (current->next != NULL && current->dir == TRUE)
+            while (current->next && current->dir)
                 current = current->next;
             //compare only with files
             if (!current->dir && strcmp (current->name, fn) < 0)
-                while (current->next != NULL && strcmp (current->name, fn) < 0)
+                while (current->next && strcmp (current->name, fn) < 0)
                     current = current->next;
             //
             if (strcmp (current->name, fn) > 0)

@@ -253,7 +253,7 @@ int rootfs_probe ()
         if (rootfs[k].fs == NULL && rootfs[k].devid > 0)
         {
             //check for new devices connected
-            NPrintf ("rootfs_probe probing attach on %d\n", k);
+            NPrintf ("rootfs_probe probing attach on %d for 0x%llx or %lld %d\n", k, rootfs[k].devid, rootfs[k].devid, (rootfs[k].devid<0));
             //probe FAT
             res = fflib_attach (fs_fat_k, rootfs[k].devid, 1);
             if (0 == res)
@@ -270,24 +270,21 @@ int rootfs_probe ()
             }
             else
             {
-                NPrintf ("!rootfs_probe attach fat%d: on dev %d, res %d\n", fs_fat_k, k, res);
-                fflib_detach (fs_fat_k);
+                int res2 = fflib_detach (fs_fat_k);
+                NPrintf ("!rootfs_probe attach fat%d: on dev %d, res %d, res2 %d\n", fs_fat_k, k, res, res2);
             }
             //probe NTFS
             //probe EXT
         }
     }
     //
-    if (flag)
-        return 1;
-    //
-    return 0;
+    return flag;
 }
 
 int root_scan_path (struct fm_panel *p)
 {
-    //probe rootfs devices
-    rootfs_probe ();
+    //probe rootfs devices - done in app update by mount monitoring
+    //rootfs_probe ();
     //
     int k;
     for (k = 0; k < sizeof (rootfs) / sizeof (struct fs_root); k++)

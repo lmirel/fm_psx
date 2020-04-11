@@ -15,4 +15,7 @@ int fs_get_fstype (char *path, int *npo);
 
 int fatfs_init();
 
+//automounter logic
+int rootfs_probe ();
+
 #endif
