@@ -22,3 +22,12 @@ todos:
 !BE EXTRA CAREFUL WITH SYSTEM FILES/DIRS!
 <br>
 USE AT YOUR OWN RISK!
+
+# building
+use the opensource toolchain and libs from here:
+- https://github.com/bucanero/ps3toolchain
+- https://github.com/bucanero/PSL1GHT
+- https://github.com/Estwald/PSDK3v2/tree/master/libraries-src/Tiny3D
+
+additional libraries can be found here but should not be required
+- https://github.com/bucanero/psl1ght-libs
