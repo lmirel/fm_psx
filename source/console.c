@@ -6,6 +6,10 @@
 #include <math.h>
 #include <stdarg.h>
 
+#ifdef LIBBUILD
+void NPrintf (const char* fmt, ...) { }
+void initConsole() {}
+#else
 #include "console.h"
 
 #include <tiny3d.h>
@@ -177,3 +181,5 @@ void DPrintf(char *format, ...)
     }
 
 }
+
+#endif

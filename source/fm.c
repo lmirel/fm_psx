@@ -251,7 +251,7 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
     buffer = malloc (BSZ);
     if (buffer == NULL)
     {
-        DPrintf ("!failed to allocate buffer of %dbytes\n", BSZ);
+        NPrintf ("!failed to allocate buffer of %dbytes\n", BSZ);
         return -1;
     }
     //prepare source

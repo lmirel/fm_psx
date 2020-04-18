@@ -93,17 +93,25 @@ int fps_update ()
     return fpsh;
 }
 
-msgType mdialogyesno = MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO  | MSG_DIALOG_DEFAULT_CURSOR_NO;
-msgType mdialogyesno2 = MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MSG_DIALOG_DISABLE_CANCEL_ON;
-msgType mdialogyesno3 = MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO;
 
-msgType mdialogok = MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK;
+void do_flip ()
+{
+    sysUtilCheckCallback ();
+    flip ();
+    tiny3d_Flip ();
+}
 
-msgType mdialog = MSG_DIALOG_NORMAL | MSG_DIALOG_DISABLE_CANCEL_ON;
+static msgType mdialogyesno = MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO  | MSG_DIALOG_DEFAULT_CURSOR_NO;
+static msgType mdialogyesno2 = MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MSG_DIALOG_DISABLE_CANCEL_ON;
+static msgType mdialogyesno3 = MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO;
 
-volatile int dialog_action = 0;
+static msgType mdialogok = MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK;
 
-void my_dialog(msgButton button, void *userdata)
+static msgType mdialog = MSG_DIALOG_NORMAL | MSG_DIALOG_DISABLE_CANCEL_ON;
+
+static volatile int dialog_action = 0;
+
+static void my_dialog(msgButton button, void *userdata)
 {
     switch(button)
     {
@@ -120,7 +128,7 @@ void my_dialog(msgButton button, void *userdata)
     }
 }
 
-void my_dialog2(msgButton button, void *userdata)
+static void my_dialog2(msgButton button, void *userdata)
 {
     switch(button)
     {
@@ -134,14 +142,7 @@ void my_dialog2(msgButton button, void *userdata)
     }
 }
 
-void do_flip ()
-{
-    sysUtilCheckCallback ();
-    flip ();
-    tiny3d_Flip ();
-}
-
-void wait_dialog ()
+static void wait_dialog ()
 {
     while(!dialog_action)
     {
@@ -498,13 +499,14 @@ static void double_bar(char *caption)
 #endif
 
 //4th
-extern int app_render (int dat);
+//extern int app_render (int dat);
 
 void Draw_scene()
 {
     //app_render (0);
 }
 
+#ifndef LIBBUILD
 void cls()
 {
     tiny3d_Clear(0xff000000, TINY3D_CLEAR_ALL);
@@ -607,3 +609,4 @@ void UTF8_to_UTF16(u8 *stb, u16 *stw)
    *stw++ = 0;
 }
 
+#endif
