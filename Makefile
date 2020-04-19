@@ -33,7 +33,7 @@ SCETOOL_FLAGS	+=	--self-cap-flags 0000000000000000000000000000000000000000000000
 # SOURCES is a list of directories containing source code
 # INCLUDES is a list of directories containing extra header files
 #---------------------------------------------------------------------------------
-TARGET		:=	$(notdir $(CURDIR))
+TARGET		:=	sfm_ps3
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
@@ -43,7 +43,9 @@ INCLUDES	:=	include ../include lib/include
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project
 #---------------------------------------------------------------------------------
-LIBS		:=	../lib/libfatfs.a -lsysfs -lfont -lfreetype -lz -ltiny3d -lsimdmath -lgcm_sys -lnet -lio -lsysutil -lrt -llv2 -lsysmodule -lm
+LIBS		:=	../lib/libfatfs.a ../lib/libntfs_ext.a -lsysfs -lfont -lfreetype \
+				-lz -ltiny3d -lsimdmath -lgcm_sys -lnet -lio -lsysutil -lrt -llv2 \
+				-lsysmodule -lm
 
 #---------------------------------------------------------------------------------
 # options for code generation

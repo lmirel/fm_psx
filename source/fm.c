@@ -20,6 +20,7 @@
 #include "pad.h"
 
 #include "ff.h"
+#include "ntfs.h"
 
 //status message
 static char *s_msg[STATUS_H] = {NULL, NULL, NULL, NULL};
@@ -239,8 +240,9 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
     int fsx = 0;
     BYTE *buffer = NULL;    // File copy buffer
     FIL f1src, f1dst;       // File objects
+    int fd3src = -1, fd3dst = -1;
     int ret = 0;
-    int f2src, f2dst;
+    int f2src = -1, f2dst = -1;
     u64 br, bw;
     char src_ok = 0, dst_ok = 0;
     unsigned long long dsz = 0;
@@ -290,7 +292,14 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
         break;
         case FS_TNTFS:
         {
-            
+            fd3src = ps3ntfs_open (src, O_RDONLY, 0);
+            if (fd3src < 0)
+            {
+                NPrintf ("!fm_file_copy: NTFS src open %s\n", src);
+	            ret = -1;
+            }
+            else
+                src_ok = 1;
         }
         break;
     }
@@ -337,7 +346,14 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
         break;
         case FS_TNTFS:
         {
-            
+            fd3dst = ps3ntfs_open (dst, O_WRONLY | O_CREAT | O_TRUNC, 0);
+            if (fd3dst < 0)
+            {
+                NPrintf ("!fm_file_copy: NTFS dst create %s\n", dst);
+	            ret = -1;
+            }
+            else
+                dst_ok = 1;
         }
         break;
     }
@@ -378,13 +394,13 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
                 break;
                 case FS_TNTFS:
                 {
-                    
+                    br = ps3ntfs_read (fd3src, (char *)buffer, (size_t)BSZ);
                 }
                 break;
             }
             if (br == 0)
                 NPrintf ("fm_file_copy: read 0B/EOF from %s\n", src);
-            if (ret == -1 || br == 0)
+            if (ret == -1 || br <= 0)
                 break;
             //write data
             switch (dstt)
@@ -416,7 +432,7 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
                 break;
                 case FS_TNTFS:
                 {
-                    
+                   bw = ps3ntfs_write (fd3dst, (char *)buffer, (size_t) br);
                 }
                 break;
             }
@@ -489,7 +505,8 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
         break;
         case FS_TNTFS:
         {
-            
+            if (src_ok)
+                ps3ntfs_close (fd3src);
         }
         break;
     }
@@ -520,7 +537,8 @@ int fm_file_copy (char *src, char *dst, char srct, char dstt, unsigned long long
         break;
         case FS_TNTFS:
         {
-            
+            if (dst_ok)
+                ps3ntfs_close (fd3dst);
         }
         break;
     }
@@ -663,7 +681,8 @@ int fm_job_copy (char *src, char *dst, int (*ui_render)(int dt))
                     break;
                     case FS_TNTFS:
                     {
-                        
+                        if ((ret = ps3ntfs_mkdir (dp, 0777)))
+                            NPrintf ("!fm_job_copy: SYS can't create dir %s, res %d\n", dp, ret);
                     }
                     break;
                 }
@@ -735,7 +754,7 @@ int fm_job_rename (char *path, char *old, char *new)
             if ((ret = f_rename (op, np)))
                 NPrintf ("!fm_job_rename: FAT can't rename %s to %s in %s res %d\n", op, np, npath, ret);
             snprintf (lp, CBSIZE, "job: FAT rename %s to %s in %s: %s", old, new, npath, ret?"KO":"OK");
-            fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+            fm_status_set (lp, 3, ret?0xff0000FF:0x00ff00FF);
             //unmount
             f_mount (0, npath, 0);
         }
@@ -756,7 +775,7 @@ int fm_job_rename (char *path, char *old, char *new)
                 NPrintf ("!fm_job_delete: SYS can't rename %s to %s in %s res %d\n", old, new, npath, ret);
             //
             snprintf (lp, CBSIZE, "job: SYS rename %s to %s in %s: %s", old, new, npath, ret?"KO":"OK");
-            fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+            fm_status_set (lp, 3, ret?0xff0000FF:0x00ff00FF);
         }
         break;
         case FS_TEXT:
@@ -766,7 +785,19 @@ int fm_job_rename (char *path, char *old, char *new)
         break;
         case FS_TNTFS:
         {
-            
+            char *npath = path + nsp;
+            //
+            snprintf (lp, CBSIZE, "job: NTFS rename %s to %s in %s", old, new, npath);
+            fm_status_set (lp, 2, 0xffffeeFF);
+            //build paths
+            snprintf (op, CBSIZE, "%s/%s", npath, old);
+            snprintf (np, CBSIZE, "%s/%s", npath, new);
+            //
+            if ((ret = ps3ntfs_rename (op, np)))
+                NPrintf ("!fm_job_delete: NTFS can't rename %s to %s in %s res %d\n", old, new, npath, ret);
+            //
+            snprintf (lp, CBSIZE, "job: NTFS rename %s to %s in %s: %s", old, new, npath, ret?"KO":"OK");
+            fm_status_set (lp, 3, ret?0xff0000FF:0x00ff00FF);
         }
         break;
     }        //
@@ -793,7 +824,7 @@ int fm_job_newdir (char *path, char *new)
             if ((ret = f_mkdir (np)))
                 NPrintf ("!fm_job_rename: FAT can't mkdir %s in %s res %d\n", np, npath, ret);
             snprintf (lp, CBSIZE, "job: FAT mkdir %s in %s: %s", new, npath, ret?"KO":"OK");
-            fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+            fm_status_set (lp, 3, ret?0xff0000FF:0x00ff00FF);
             //unmount
             f_mount (0, npath, 0);
         }
@@ -813,7 +844,7 @@ int fm_job_newdir (char *path, char *new)
                 NPrintf ("!fm_job_delete: SYS can't mkdir %s in %s res %d\n", new, npath, ret);
             //
             snprintf (lp, CBSIZE, "job: SYS mkdir %s in %s: %s", new, npath, ret?"KO":"OK");
-            fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+            fm_status_set (lp, 3, ret?0xff0000FF:0x00ff00FF);
         }
         break;
         case FS_TEXT:
@@ -823,7 +854,18 @@ int fm_job_newdir (char *path, char *new)
         break;
         case FS_TNTFS:
         {
-            
+            char *npath = path + nsp;
+            //
+            snprintf (lp, CBSIZE, "job: NTFS mkdir %s in %s", new, npath);
+            fm_status_set (lp, 2, 0xffffeeFF);
+            //build paths
+            snprintf (np, CBSIZE, "%s/%s", npath, new);
+            //
+            if ((ret = ps3ntfs_mkdir (np, 0777)))
+                NPrintf ("!fm_job_delete: NTFS can't mkdir %s in %s res %d\n", new, npath, ret);
+            //
+            snprintf (lp, CBSIZE, "job: NTFS mkdir %s in %s: %s", new, npath, ret?"KO":"OK");
+            fm_status_set (lp, 3, ret?0xff0000FF:0x00ff00FF);
         }
         break;
     }        //
@@ -930,7 +972,7 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
                         NPrintf ("!fm_job_delete: SYS can't remove file %s, res %d\n", ptr->name, ret);
                 }
                 snprintf (lp, CBSIZE, "job: SYS delete file/dir %s - %s", ptr->name, ret?"KO":"OK");
-                fm_status_set (lp, 3, ret?0x00ff00FF:0xff0000FF);
+                fm_status_set (lp, 3, ret?0xff0000FF:0x00ff00FF);
             }
             break;
             case FS_TEXT:
@@ -940,7 +982,14 @@ int fm_job_delete (char *src, int (*ui_render)(int dt))
             break;
             case FS_TNTFS:
             {
-                
+                snprintf (lp, CBSIZE, "job: NTFS delete file/dir %s", ptr->name);
+                fm_status_set (lp, 2, 0xffffeeFF);
+                //
+                if ((ret = ps3ntfs_unlink (ptr->name)))
+                    NPrintf ("!fm_job_delete: NTFS can't remove file %s, res %d\n", ptr->name, ret);
+                //
+                snprintf (lp, CBSIZE, "job: NTFS delete file/dir %s - %s", ptr->name, ret?"KO":"OK");
+                fm_status_set (lp, 3, ret?0xff0000FF:0x00ff00FF);
             }
             break;
         }        //
