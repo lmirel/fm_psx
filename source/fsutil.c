@@ -196,6 +196,31 @@ int fs_job_scan (struct fm_job *job)
 }
 
 //probe for supported FSs on various devices
+static int _attach_fs (int k, char *flag, int *fsk, int fst, char *devfs)
+{
+    rootfs[k].fs = strdup (devfs);
+    rootfs[k].fs_type = fst;
+    rootfs[k].fs_idx = *fsk;
+    //
+    *fsk = *fsk + 1;
+    *flag = *flag + 1;
+    //
+    return 1;
+}
+
+static int _detach_fs (int k, char *flag, int *fsk)
+{
+    rootfs[k].fs_type = FS_TNONE;
+    rootfs[k].fs_idx = -1;
+    free (rootfs[k].fs);
+    rootfs[k].fs = NULL;
+    //
+    *fsk = *fsk - 1;
+    *flag = *flag + 1;
+    //
+    return 1;
+}
+
 int rootfs_probe ()
 {
     char devfs[9];
@@ -227,27 +252,15 @@ int rootfs_probe ()
                 NPrintf ("rootfs_probe detach fat%d: on dev %d fs: %s\n", rootfs[k].fs_idx, k, rootfs[k].fs);
                 //no longer valid - detach
                 fflib_detach (rootfs[k].fs_idx);
-                rootfs[k].fs_type = FS_TNONE;
-                rootfs[k].fs_idx = -1;
-                free (rootfs[k].fs);
-                rootfs[k].fs = NULL;
-                fs_fat_k--;
-                flag++;
                 //
+                _detach_fs (k, &flag, &fs_fat_k);
+                continue;
             }
             //NTFS
             if (fs_ntfs_k && rootfs[k].fs_type == FS_TNTFS)
             {
-                if (mountCount[k] > 0 && 0)
+                if (mountCount[k] > 0 && !PS3_NTFS_IsInserted (k))
                 {
-                    //no longer valid - detach
-                    rootfs[k].fs_type = FS_TNONE;
-                    rootfs[k].fs_idx = -1;
-                    free (rootfs[k].fs);
-                    rootfs[k].fs = NULL;
-                    fs_ntfs_k--;
-                    flag++;
-                    //
                     if (mounts[k])
                     {
                         int j;
@@ -261,10 +274,12 @@ int rootfs_probe ()
                         mounts[k]= NULL;
                         mountCount[k] = 0;
                     }
+                    // PS3_NTFS_IsInserted calls PS3_NTFS_Shutdown on failure.. anyway
                     PS3_NTFS_Shutdown (k);
-                    //
+                    //no longer valid - detach
+                    _detach_fs (k, &flag, &fs_ntfs_k);
                     continue;
-                }
+                } //mount count > 0
             }
             //EXT
             if (fs_ext_k && rootfs[k].fs_type == FS_TEXT)
@@ -272,13 +287,7 @@ int rootfs_probe ()
                 if (0)
                 {
                     //no longer valid - detach
-                    rootfs[k].fs_type = FS_TNONE;
-                    rootfs[k].fs_idx = -1;
-                    free (rootfs[k].fs);
-                    rootfs[k].fs = NULL;
-                    fs_ext_k--;
-                    flag++;
-                    //
+                    _detach_fs (k, &flag, &fs_ext_k);
                     continue;
                 }
             }
@@ -296,11 +305,7 @@ int rootfs_probe ()
             if (0 == res)
             {
                 snprintf (devfs, 8, "fat%d:/", fs_fat_k);
-                rootfs[k].fs = strdup (devfs);
-                rootfs[k].fs_type = FS_TFAT;
-                rootfs[k].fs_idx = fs_fat_k;
-                fs_fat_k++;
-                flag++;
+                _attach_fs (k, &flag, &fs_fat_k, FS_TFAT, devfs);
                 NPrintf ("rootfs_probe attach fat%d: on dev %d\n", rootfs[k].fs_idx, k);
                 //move on, this is taken now
                 continue;
@@ -321,11 +326,7 @@ int rootfs_probe ()
                     if((mounts[k])->name[0])
                     {
                         snprintf (devfs, 8, "%s:/", (mounts[k])->name);
-                        rootfs[k].fs = strdup (devfs);
-                        rootfs[k].fs_type = FS_TNTFS;
-                        rootfs[k].fs_idx = fs_ntfs_k;
-                        fs_ntfs_k++;
-                        flag++;
+                        _attach_fs (k, &flag, &fs_ntfs_k, FS_TNTFS, devfs);
                         NPrintf ("rootfs_probe attach ntfs%d: on dev %d as %s\n", rootfs[k].fs_idx, k, rootfs[k].fs);
                         //stat for free space
                         struct statvfs vfs;
