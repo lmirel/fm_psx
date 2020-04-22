@@ -126,7 +126,10 @@ int fs_get_fstype (char *path, int *np)
     {
         if (np)
             *np = 0; //ext and ntfs need this prefix
-        return FS_TEXT;
+        //return FS_TEXT;
+        // NTFS driver is covering EXT access
+        // rest of code can be cleaned-up
+        return FS_TNTFS;
     }
     //NTFS path
     else if (strncmp (path, "ntfs", 4) == 0)
@@ -252,6 +255,21 @@ int rootfs_probe ()
                 FATFS fs;       /* Work area (filesystem object) for logical drive */
                 if (f_mount (&fs, path, 0) == FR_OK)
                 {
+                    //todo: maybe use the same approach as in PS3_NTFS_IsInserted
+                    /*
+                    int r;
+                    device_info_t disc_info;
+                    disc_info.unknown03 = 0x12345678; // hack for Iris Manager Disc Less
+                    r = sys_storage_get_device_info (id, &disc_info);
+                    if (r < 0) 
+                    {
+                        if (r == 0x80010002) 
+                        {
+                            PS3_NTFS_Shutdown (fd);
+                        }
+                        return false;
+                    }
+                    */
                     if (f_opendir (&dir, path) == FR_OK)
                     {
                         f_closedir (&dir);
