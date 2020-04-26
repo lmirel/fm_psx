@@ -19,6 +19,19 @@ todos:
 - other confirmation dialogs on rename/delete
 - contextual menu(?!)
 
+later todos:
++ split the framework into file management lib and manager
++ write a file management lib that will handle system, ntfs/ext3 and exfat access to files:
+- use path names which will include filesystem specification:
+* for system: /dev_hdd0/, /dev_bdvd/, /app_home/, /host_root/
+* for ntfs and/or ext3: /ntfs0:/, /ext0:/
+* for ex/fat: /fat0:/
+* others..
+- store FS/file/dir specification in a pointer (e.g. PS3FP) while allowing direct access to its attributes (e.g. fd / file descriptor) for flexibility
+- will need to support at mininum ps3_fopen, ps3_fclose, ps3_fseek, ps3_f2sectors, ps3_diropen, ps3_dirnext, ps3_dirclose, etc
+- will need to handle detection/scanning of portable storage (with transparent mounting/unmounting)
+
+
 !BE EXTRA CAREFUL WITH SYSTEM FILES/DIRS!
 <br>
 USE AT YOUR OWN RISK!
